@@ -12,6 +12,8 @@ import {
   resolveVtEmbedInfo,
   detectPresetCategory,
   getPresetCategoryMeta,
+  parseTiktokVtUrl,
+  inspectTiktokVtFromCatalog,
 } from './preset-filter';
 import {
   getSeedVtEntries,
@@ -221,4 +223,46 @@ test('getTrendingByTopic returns topic-specific non-Kicau-Mania entries for kane
   assert.ok(kaneEntries.every((e) => !/kicau/i.test(e.vtTitle)));
   assert.ok(velocityEntries.every((e) => !/kicau/i.test(e.vtTitle)));
   assert.ok(gameplayEntries.every((e) => !/kicau/i.test(e.vtTitle)));
+});
+
+test('parseTiktokVtUrl and inspectTiktokVtFromCatalog accurately filter preset links from TikTok VT URLs and report feedback when a VT has no preset links', () => {
+  const parsedFull = parseTiktokVtUrl(
+    'https://www.tiktok.com/@wyxzwangyy/video/7696828668445756692'
+  );
+  assert.equal(parsedFull.isTiktokUrl, true);
+  assert.equal(parsedFull.creatorHandle, '@wyxzwangyy');
+  assert.equal(parsedFull.videoId, '7696828668445756692');
+
+  const parsedShort = parseTiktokVtUrl('Cek VT ini https://vt.tiktok.com/ZSYcLC7eq/ keren');
+  assert.equal(parsedShort.isTiktokUrl, true);
+  assert.equal(parsedShort.shortCode, 'ZSYcLC7eq');
+
+  const catalog = getTrendingSeedVtEntries();
+
+  // Case 1: TikTok VT URL that DOES contain preset links in comments/description
+  const foundResult = inspectTiktokVtFromCatalog(
+    'https://www.tiktok.com/@vkriedtz2/video/7696828668445756692',
+    catalog
+  );
+  assert.equal(foundResult.isTiktokUrl, true);
+  assert.equal(foundResult.hasPresetLinks, true);
+  assert.ok(foundResult.entries.length > 0);
+  assert.ok(foundResult.entries[0].links.length >= 3);
+
+  // Also verify filterAndSortVtEntries works normally on the extracted VT entries
+  const filteredXmlOnly = filterAndSortVtEntries(foundResult.entries, {
+    linkType: 'xml_drive',
+    platform: 'tiktok',
+  });
+  assert.ok(filteredXmlOnly.length > 0);
+
+  // Case 2: TikTok VT URL that does NOT contain any preset links in comments or description
+  const emptyVtResult = inspectTiktokVtFromCatalog(
+    'https://www.tiktok.com/@dailyvlog_random/video/7106594312292453675',
+    catalog
+  );
+  assert.equal(emptyVtResult.isTiktokUrl, true);
+  assert.equal(emptyVtResult.hasPresetLinks, false);
+  assert.equal(emptyVtResult.entries.length, 0);
+  assert.match(emptyVtResult.feedbackMessage, /tidak mengandung link preset/i);
 });

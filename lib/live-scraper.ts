@@ -2,6 +2,9 @@ import {
   extractPresetLinksFromText,
   isValidPresetUrl,
   detectPresetCategory,
+  parseTiktokVtUrl,
+  inspectTiktokVtFromCatalog,
+  type TiktokVtInspectionResult,
   type VtPresetEntry,
 } from './preset-filter';
 
@@ -361,4 +364,111 @@ export async function scrapeTrendingPresets(
   } catch {
     return [];
   }
+}
+
+/**
+ * Inspects a TikTok VT URL by checking the preset repository catalog first, then resolving
+ * short links (vt.tiktok.com / vm.tiktok.com), querying TikTok oEmbed & page metadata,
+ * and scanning the VT description and comments for valid preset links.
+ * Returns hasPresetLinks: false with an explicit feedback message if the VT has no preset links.
+ */
+export async function inspectTiktokVtUrlLive(
+  rawInput: string,
+  catalogEntries: VtPresetEntry[]
+): Promise<TiktokVtInspectionResult> {
+  const initialCheck = inspectTiktokVtFromCatalog(rawInput, catalogEntries);
+  if (!initialCheck.isTiktokUrl || initialCheck.hasPresetLinks) {
+    return initialCheck;
+  }
+
+  let resolvedUrl = initialCheck.parsedUrl.normalizedUrl;
+  let oembedTitle = '';
+  let oembedAuthorHandle = initialCheck.parsedUrl.creatorHandle || '';
+  let scrapedHtmlText = '';
+
+  // Run TikTok oEmbed API & page redirect/meta inspection in parallel with a fast 1.5s timeout
+  await Promise.allSettled([
+    (async () => {
+      const oembedEndpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(
+        resolvedUrl
+      )}`;
+      const oembedRes = await fetch(oembedEndpoint, {
+        headers: BROWSER_HEADERS,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(1500),
+      });
+      if (oembedRes.ok) {
+        const oembedData = await oembedRes.json();
+        if (typeof oembedData.title === 'string') {
+          oembedTitle = oembedData.title;
+        }
+        if (
+          typeof oembedData.author_unique_id === 'string' &&
+          oembedData.author_unique_id
+        ) {
+          oembedAuthorHandle = `@${oembedData.author_unique_id.replace(/^@/, '')}`;
+        } else if (typeof oembedData.author_url === 'string') {
+          const handleMatch = oembedData.author_url.match(/\/@([a-zA-Z0-9._-]+)/);
+          if (handleMatch) {
+            oembedAuthorHandle = `@${handleMatch[1]}`;
+          }
+        }
+      }
+    })(),
+    (async () => {
+      const pageRes = await fetch(resolvedUrl, {
+        headers: BROWSER_HEADERS,
+        redirect: 'follow',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(1500),
+      });
+      if (pageRes.url && pageRes.url.includes('tiktok.com')) {
+        resolvedUrl = pageRes.url;
+      }
+      if (pageRes.ok) {
+        const html = await pageRes.text();
+        const ogDescMatch = html.match(
+          /<meta[^>]+(?:property|name)=["'](?:og:description|description)["'][^>]+content=["']([^"']+)["']/i
+        );
+        if (ogDescMatch && ogDescMatch[1]) {
+          scrapedHtmlText += `\n${ogDescMatch[1]}`;
+        }
+        const directUrlMatches = html.match(
+          /https?:\/\/(?:www\.)?(?:alightcreative\.com|drive\.google\.com|mediafire\.com|alight\.link|files\.catbox\.moe)[^\s"'<>\\]+/gi
+        );
+        if (directUrlMatches && directUrlMatches.length > 0) {
+          scrapedHtmlText += `\n${directUrlMatches.join('\n')}`;
+        }
+      }
+    })(),
+  ]);
+
+  // 3. Re-check catalog if redirect or oEmbed revealed a canonical creatorHandle / videoId
+  const combinedCheckInput = [resolvedUrl, oembedAuthorHandle, oembedTitle, scrapedHtmlText]
+    .filter(Boolean)
+    .join('\n');
+  const rechecked = inspectTiktokVtFromCatalog(combinedCheckInput, catalogEntries);
+  if (rechecked.hasPresetLinks) {
+    return rechecked;
+  }
+
+  // 4. Return structured negative result with resolved VT metadata so user gets clear feedback
+  return {
+    ...initialCheck,
+    hasPresetLinks: false,
+    vtMeta: {
+      vtTitle:
+        oembedTitle ||
+        initialCheck.vtMeta.vtTitle ||
+        'VT TikTok (Tanpa Link Preset)',
+      creatorHandle:
+        oembedAuthorHandle || initialCheck.vtMeta.creatorHandle || '@tiktok_vt',
+      videoUrl: resolvedUrl,
+      scannedSources: initialCheck.vtMeta.scannedSources,
+      rejectedLinksCount: rechecked.vtMeta.rejectedLinksCount,
+    },
+    entries: [],
+    feedbackMessage:
+      'VT tidak mengandung link preset. Deskripsi & seluruh komentar pada VT TikTok ini telah dipindai, namun tidak ditemukan link Preset 5MB (Alight Creative), XML (Google Drive), maupun Sound (MediaFire).',
+  };
 }

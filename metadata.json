@@ -1,0 +1,6 @@
+{
+  "name": "PresetFinder Studio — Pencarian & Filter Link Preset AM",
+  "description": "Mesin pencari dan penyaring link preset Alight Motion (5MB, XML Google Drive, Sound MediaFire) dari deskripsi dan komentar YouTube serta TikTok.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

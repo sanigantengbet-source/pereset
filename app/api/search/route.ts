@@ -3,13 +3,14 @@ import {
   extractPresetLinksFromText,
   filterAndSortVtEntries,
   detectPresetCategory,
+  parseTiktokVtUrl,
   type PlatformType,
   type PresetLinkType,
   type PresetCategoryType,
   type VtPresetEntry,
 } from '@/lib/preset-filter';
-import {getSeedVtEntries} from '@/lib/preset-seed-data';
-import {scrapeLivePresetsForSound} from '@/lib/live-scraper';
+import {getSeedVtEntries, getTrendingSeedVtEntries} from '@/lib/preset-seed-data';
+import {scrapeLivePresetsForSound, inspectTiktokVtUrlLive} from '@/lib/live-scraper';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +23,35 @@ export async function GET(req: NextRequest) {
   const sortBy = (searchParams.get('sortBy') || 'likes') as 'likes' | 'views' | 'links';
   const skipLive = searchParams.get('skipLive') === '1';
 
+  const parsedVt = parseTiktokVtUrl(query);
+
+  // Branch 1: Search by TikTok VT URL
+  if (parsedVt.isTiktokUrl) {
+    const allCatalogEntries = getTrendingSeedVtEntries();
+    const vtInspection = await inspectTiktokVtUrlLive(query, allCatalogEntries);
+
+    const filteredVtResults = filterAndSortVtEntries(vtInspection.entries, {
+      query: '',
+      platform,
+      linkType,
+      category,
+      sortBy,
+    });
+
+    return NextResponse.json({
+      query,
+      isTiktokVtQuery: true,
+      vtInspection,
+      totalVtCount: filteredVtResults.length,
+      totalFilteredLinksCount: filteredVtResults.reduce(
+        (acc, e) => acc + e.links.length,
+        0
+      ),
+      entries: filteredVtResults,
+    });
+  }
+
+  // Branch 2: Standard Search by Sound Name / Keyword
   const seedEntries = getSeedVtEntries();
   const matchedSeed = filterAndSortVtEntries(seedEntries, {
     query,
@@ -58,6 +88,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     query,
+    isTiktokVtQuery: false,
     totalVtCount: finalResults.length,
     totalFilteredLinksCount: finalResults.reduce((acc, e) => acc + e.links.length, 0),
     entries: finalResults,

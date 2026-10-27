@@ -29,12 +29,19 @@ import {
   BookMarked,
   Layers,
   Sparkles,
+  ArrowRight,
+  Link2,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   summarizePresetLinks,
   filterAndSortVtEntries,
   detectPresetCategory,
   getPresetCategoryMeta,
+  parseTiktokVtUrl,
+  inspectTiktokVtFromCatalog,
+  type TiktokVtInspectionResult,
   type PlatformType,
   type PresetLinkType,
   type PresetCategoryType,
@@ -42,6 +49,7 @@ import {
 } from '@/lib/preset-filter';
 import {
   getSeedVtEntries,
+  getTrendingSeedVtEntries,
   getTrendingByTopic,
 } from '@/lib/preset-seed-data';
 import {VtDetailModal} from './vt-detail-modal';
@@ -65,12 +73,12 @@ const PRESET_CATEGORIES: Array<{
   shortLabel: string;
   dotColor: string;
 }> = [
-  {id: 'all', label: 'Semua Kategori', shortLabel: 'Semua', dotColor: '#8b949e'},
-  {id: 'jj_presets', label: 'JJ Presets', shortLabel: 'JJ Presets', dotColor: '#58a6ff'},
-  {id: 'cinematic', label: 'Cinematic', shortLabel: 'Cinematic', dotColor: '#a371f7'},
-  {id: 'color_grading', label: 'Color Grading', shortLabel: 'Color Grading', dotColor: '#d29922'},
-  {id: 'velocity', label: 'Velocity & Slowmo', shortLabel: 'Velocity', dotColor: '#3fb950'},
-  {id: 'gameplay', label: 'Gameplay ML/FF', shortLabel: 'Gameplay', dotColor: '#f78166'},
+  {id: 'all', label: 'Semua Kategori', shortLabel: 'Semua', dotColor: '#111111'},
+  {id: 'jj_presets', label: 'JJ Presets', shortLabel: 'JJ Presets', dotColor: '#F7B91C'},
+  {id: 'cinematic', label: 'Cinematic', shortLabel: 'Cinematic', dotColor: '#F25C05'},
+  {id: 'color_grading', label: 'Color Grading', shortLabel: 'Color Grading', dotColor: '#F7B91C'},
+  {id: 'velocity', label: 'Velocity & Slowmo', shortLabel: 'Velocity', dotColor: '#111111'},
+  {id: 'gameplay', label: 'Gameplay ML/FF', shortLabel: 'Gameplay', dotColor: '#F25C05'},
 ];
 
 const TRENDING_CATEGORIES = [
@@ -90,8 +98,404 @@ function buildRepoSlug(entry: VtPresetEntry): string {
   return base || 'am-preset-pack';
 }
 
+/**
+ * Custom Neobrutalist Vector Illustration matching the Yellow/Black/Checkerboard graphic style in IMG_1220.jpeg
+ */
+function NeobrutalistHeroIllustration() {
+  return (
+    <svg
+      viewBox="0 0 280 135"
+      className="w-56 sm:w-64 h-auto shrink-0 select-none"
+      aria-hidden="true"
+    >
+      {/* Background City / Studio Equalizer Silhouette (like the light gray skyline in IMG_1220.jpeg) */}
+      <rect x="28" y="22" width="26" height="88" fill="#E5E3DC" />
+      <rect x="60" y="8" width="32" height="102" fill="#E5E3DC" />
+      <rect x="98" y="34" width="24" height="76" fill="#E5E3DC" />
+      <rect x="128" y="16" width="36" height="94" fill="#E5E3DC" />
+      <rect x="170" y="28" width="28" height="82" fill="#E5E3DC" />
+      <rect x="204" y="14" width="30" height="96" fill="#E5E3DC" />
+
+      {/* Ground Shadow & Road Line */}
+      <ellipse cx="142" cy="118" rx="116" ry="8" fill="#111111" />
+      <line x1="10" y1="118" x2="270" y2="118" stroke="#111111" strokeWidth="3" />
+
+      {/* Top Roof Sign ("AM 5MB" like "TAXI" roof badge in IMG_1220.jpeg) */}
+      <rect
+        x="114"
+        y="30"
+        width="54"
+        height="16"
+        fill="#111111"
+        stroke="#111111"
+        strokeWidth="2.5"
+      />
+      <text
+        x="141"
+        y="41.5"
+        textAnchor="middle"
+        fill="#FFFFFF"
+        fontSize="9.5"
+        fontWeight="800"
+        fontFamily="monospace"
+        letterSpacing="1"
+      >
+        AM·XML
+      </text>
+
+      {/* Upper Cabin Frame */}
+      <path
+        d="M68 74 L90 46 L192 46 L214 74 Z"
+        fill="#F7B91C"
+        stroke="#111111"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      {/* Cabin Windows */}
+      <path
+        d="M78 71 L94 51 L136 51 L136 71 Z"
+        fill="#FFFFFF"
+        stroke="#111111"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M144 71 L144 51 L186 51 L202 71 Z"
+        fill="#FFFFFF"
+        stroke="#111111"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+
+      {/* Main Cruiser Body in Taxi Yellow (#F7B91C) */}
+      <rect
+        x="34"
+        y="74"
+        width="214"
+        height="34"
+        rx="4"
+        fill="#F7B91C"
+        stroke="#111111"
+        strokeWidth="3"
+      />
+
+      {/* Checkerboard Racing / Taxi Stripe across the side */}
+      <g>
+        {Array.from({length: 14}).map((_, i) => (
+          <React.Fragment key={i}>
+            <rect
+              x={56 + i * 12}
+              y={84}
+              width="6"
+              height="5"
+              fill={i % 2 === 0 ? '#111111' : '#FFFFFF'}
+            />
+            <rect
+              x={56 + i * 12}
+              y={89}
+              width="6"
+              height="5"
+              fill={i % 2 === 0 ? '#FFFFFF' : '#111111'}
+            />
+          </React.Fragment>
+        ))}
+        <rect
+          x="56"
+          y="84"
+          width="168"
+          height="10"
+          fill="none"
+          stroke="#111111"
+          strokeWidth="1.5"
+        />
+      </g>
+
+      {/* Front Grille & Headlights */}
+      <rect
+        x="30"
+        y="80"
+        width="10"
+        height="12"
+        fill="#FFFFFF"
+        stroke="#111111"
+        strokeWidth="2.5"
+      />
+      <rect
+        x="240"
+        y="80"
+        width="10"
+        height="12"
+        fill="#F25C05"
+        stroke="#111111"
+        strokeWidth="2.5"
+      />
+
+      {/* Bumpers */}
+      <rect
+        x="24"
+        y="98"
+        width="22"
+        height="8"
+        fill="#FFFFFF"
+        stroke="#111111"
+        strokeWidth="2.5"
+      />
+      <rect
+        x="236"
+        y="98"
+        width="20"
+        height="8"
+        fill="#FFFFFF"
+        stroke="#111111"
+        strokeWidth="2.5"
+      />
+
+      {/* Wheels with Keyframe Diamond Centers */}
+      <circle cx="82" cy="108" r="14" fill="#111111" />
+      <circle cx="82" cy="108" r="7" fill="#FFFFFF" />
+      <rect
+        x="79"
+        y="105"
+        width="6"
+        height="6"
+        transform="rotate(45 82 108)"
+        fill="#F25C05"
+      />
+
+      <circle cx="202" cy="108" r="14" fill="#111111" />
+      <circle cx="202" cy="108" r="7" fill="#FFFFFF" />
+      <rect
+        x="199"
+        y="105"
+        width="6"
+        height="6"
+        transform="rotate(45 202 108)"
+        fill="#F25C05"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Creator Profile Avatar (Displays a distinct YouTube Channel or TikTok Creator Profile Avatar
+ * for each account handle with platform badge and @handle tag, matching the Neobrutalist portrait style)
+ */
+function CreatorProfileAvatar({
+  entry,
+  profileHref,
+}: {
+  entry: VtPresetEntry;
+  profileHref: string;
+}) {
+  const cleanHandle = entry.creatorHandle.replace(/^@/, '').trim() || 'creator';
+
+  // Deterministic seed from creator handle so each creator has their own unique profile look
+  let hash = 0;
+  for (let i = 0; i < cleanHandle.length; i++) {
+    hash = (hash * 31 + cleanHandle.charCodeAt(i)) | 0;
+  }
+  const absHash = Math.abs(hash);
+  const bgPalette = ['#FFE066', '#FFD2B3', '#C3F0CA', '#CDE4FF', '#F3D9FA', '#F7B91C'];
+  const shirtPalette = ['#F25C05', '#111111', '#2563EB', '#16A34A', '#D97706', '#DC2626'];
+  const skinPalette = ['#FFDFC4', '#F0C8A0', '#FFDCB1', '#E8B88A'];
+  const bgColor = bgPalette[absHash % bgPalette.length];
+  const shirtColor = shirtPalette[(absHash >> 2) % shirtPalette.length];
+  const skinColor = skinPalette[(absHash >> 4) % skinPalette.length];
+  const styleVariant = absHash % 4; // 0: headphones, 1: visor cap + glasses, 2: spiky hair, 3: beanie + mic
+
+  return (
+    <a
+      href={profileHref}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Profil ${entry.platform === 'tiktok' ? 'TikTok' : 'YouTube'} @${cleanHandle}`}
+      title={`Buka profil ${entry.platform === 'tiktok' ? 'TikTok' : 'YouTube'} @${cleanHandle}`}
+      className="group relative w-16 h-[72px] sm:w-[74px] sm:h-[78px] border-2 border-[#111111] bg-white shadow-[3px_3px_0px_#111111] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[1px_1px_0px_#111111] transition-all flex flex-col justify-between overflow-hidden shrink-0"
+    >
+      {/* Top-right Platform Badge (YT / TT) */}
+      <span
+        className={`absolute top-0 right-0 z-10 px-1 py-0.5 text-[9px] font-mono font-extrabold uppercase leading-none border-b-2 border-l-2 border-[#111111] ${
+          entry.platform === 'tiktok'
+            ? 'bg-[#111111] text-[#F7B91C]'
+            : 'bg-[#F25C05] text-white'
+        }`}
+      >
+        {entry.platform === 'tiktok' ? 'TT' : 'YT'}
+      </span>
+
+      {/* Creator Portrait Avatar Canvas */}
+      <div
+        className="w-full flex-1 relative flex items-end justify-center overflow-hidden"
+        style={{backgroundColor: bgColor}}
+      >
+        <svg
+          viewBox="0 0 64 54"
+          className="w-full h-full"
+          aria-hidden="true"
+        >
+          {/* Subtle halftone / ring backdrop */}
+          <circle
+            cx="32"
+            cy="26"
+            r="21"
+            fill="#FFFFFF"
+            fillOpacity="0.55"
+            stroke="#111111"
+            strokeWidth="1.5"
+            strokeDasharray="3 2"
+          />
+
+          {/* Shoulders / Creator Hoodie or Jacket */}
+          <path
+            d="M8 54 C9 38, 55 38, 56 54 Z"
+            fill={shirtColor}
+            stroke="#111111"
+            strokeWidth="2.5"
+          />
+          {/* Hoodie V-neck / Collar detail */}
+          <polygon
+            points="25,40 32,49 39,40"
+            fill="#FFFFFF"
+            stroke="#111111"
+            strokeWidth="2"
+          />
+
+          {/* Neck */}
+          <rect
+            x="27"
+            y="32"
+            width="10"
+            height="9"
+            fill={skinColor}
+            stroke="#111111"
+            strokeWidth="2"
+          />
+
+          {/* Studio Headphones Arc (Variant 0 or 3) */}
+          {(styleVariant === 0 || styleVariant === 3) && (
+            <>
+              <path
+                d="M16 25 C16 8, 48 8, 48 25"
+                fill="none"
+                stroke="#111111"
+                strokeWidth="3"
+              />
+              <rect
+                x="12"
+                y="20"
+                width="6"
+                height="11"
+                rx="2"
+                fill="#F7B91C"
+                stroke="#111111"
+                strokeWidth="2"
+              />
+              <rect
+                x="46"
+                y="20"
+                width="6"
+                height="11"
+                rx="2"
+                fill="#F7B91C"
+                stroke="#111111"
+                strokeWidth="2"
+              />
+            </>
+          )}
+
+          {/* Face / Head */}
+          <circle
+            cx="32"
+            cy="24"
+            r="12.5"
+            fill={skinColor}
+            stroke="#111111"
+            strokeWidth="2.5"
+          />
+
+          {/* Hair / Cap Variants */}
+          {styleVariant === 1 ? (
+            /* Streetwear Cap */
+            <>
+              <path
+                d="M19 20 C19 9, 45 9, 45 20 Z"
+                fill="#111111"
+                stroke="#111111"
+                strokeWidth="1.5"
+              />
+              <path
+                d="M18 19 L50 19 L48 22 L18 22 Z"
+                fill="#F25C05"
+                stroke="#111111"
+                strokeWidth="2"
+              />
+            </>
+          ) : styleVariant === 2 ? (
+            /* Creator Messy / Spiky Hair */
+            <path
+              d="M18 22 C17 12, 25 8, 32 10 C39 8, 47 12, 46 22 C42 17, 36 16, 32 17 C27 16, 22 17, 18 22 Z"
+              fill="#111111"
+            />
+          ) : (
+            /* Clean Modern Parted Hair */
+            <path
+              d="M19 22 C19 10, 45 10, 45 22 C41 16, 24 15, 19 22 Z"
+              fill="#111111"
+            />
+          )}
+
+          {/* Glasses on Variant 1 & 2 */}
+          {styleVariant === 1 || styleVariant === 2 ? (
+            <g>
+              <rect
+                x="22.5"
+                y="21.5"
+                width="7.5"
+                height="5.5"
+                fill="#FFFFFF"
+                stroke="#111111"
+                strokeWidth="2"
+              />
+              <rect
+                x="34"
+                y="21.5"
+                width="7.5"
+                height="5.5"
+                fill="#FFFFFF"
+                stroke="#111111"
+                strokeWidth="2"
+              />
+              <line x1="30" y1="24" x2="34" y2="24" stroke="#111111" strokeWidth="2" />
+            </g>
+          ) : (
+            <>
+              <circle cx="27.5" cy="24.5" r="1.7" fill="#111111" />
+              <circle cx="36.5" cy="24.5" r="1.7" fill="#111111" />
+            </>
+          )}
+
+          {/* Confident Creator Smile */}
+          <path
+            d="M28 30.5 Q32 33.5 36 30.5"
+            fill="none"
+            stroke="#111111"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+
+      {/* Bottom Creator @Handle Strip */}
+      <span className="w-full text-center bg-[#111111] group-hover:bg-[#F25C05] text-white font-mono text-[9.5px] font-bold tracking-tight leading-tight py-1 px-1 truncate border-t-2 border-[#111111] transition-colors">
+        @{cleanHandle}
+      </span>
+    </a>
+  );
+}
+
 export function PresetFinderWorkspace() {
   const initialSearchEntries = useMemo(() => getSeedVtEntries(), []);
+  const allCatalogEntries = useMemo(() => getTrendingSeedVtEntries(), []);
   const initialTrendingEntries = useMemo(() => getTrendingByTopic('all', false), []);
 
   // Separate Beranda (Trending Realtime), Pencarian (Search), and Tersimpan (Saved)
@@ -100,6 +504,9 @@ export function PresetFinderWorkspace() {
   // Search & Filter state
   const [searchInput, setSearchInput] = useState('kicau mania');
   const [activeQuery, setActiveQuery] = useState('kicau mania');
+  const [vtLinkInput, setVtLinkInput] = useState('');
+  const [vtInspectionResult, setVtInspectionResult] =
+    useState<TiktokVtInspectionResult | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<'all' | PresetCategoryType>('all');
   const [platformFilter, setPlatformFilter] = useState<'all' | PlatformType>('all');
   const [linkTypeFilter, setLinkTypeFilter] = useState<'all' | PresetLinkType>('all');
@@ -239,10 +646,84 @@ export function PresetFinderWorkspace() {
     }));
   };
 
+  const executeTiktokVtLinkScan = async (rawVtUrl: string) => {
+    const trimmed = rawVtUrl.trim();
+    if (!trimmed) return;
+
+    setVtLinkInput(trimmed);
+    setActiveView('search');
+    setCategoryFilter('all');
+    setPlatformFilter('all');
+    setLinkTypeFilter('all');
+    setIsLoading(true);
+    const startedAt = Date.now();
+
+    // Immediate client-side catalog & inline text check
+    const localInspection = inspectTiktokVtFromCatalog(trimmed, allCatalogEntries);
+    setVtInspectionResult(localInspection);
+    setActiveQuery('');
+    setEntries(localInspection.entries);
+
+    if (localInspection.isTiktokUrl) {
+      try {
+        const params = new URLSearchParams({
+          q: trimmed,
+          platform: 'all',
+          linkType: 'all',
+          category: 'all',
+          sortBy,
+        });
+        const res = await fetch(`/api/search?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.vtInspection) {
+            setVtInspectionResult(data.vtInspection);
+            setEntries(
+              Array.isArray(data.vtInspection.entries)
+                ? data.vtInspection.entries
+                : []
+            );
+          }
+        }
+      } catch {
+        // Keep localInspection fallback if offline
+      }
+    }
+
+    const elapsed = Date.now() - startedAt;
+    const remainingDelay = Math.max(0, 280 - elapsed);
+    setTimeout(() => setIsLoading(false), remainingDelay);
+  };
+
+  const handleVtLinkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeTiktokVtLinkScan(vtLinkInput);
+  };
+
+  const handleClearVtLinkScan = () => {
+    setVtLinkInput('');
+    setVtInspectionResult(null);
+    setCategoryFilter('all');
+    setPlatformFilter('all');
+    setLinkTypeFilter('all');
+    setSearchInput('kicau mania');
+    setActiveQuery('kicau mania');
+    setEntries(initialSearchEntries);
+  };
+
   const executeSearch = async (queryToRun: string) => {
     const trimmed = queryToRun.trim();
+
+    // Automatically route TikTok VT links pasted in the main search input to the VT link scanner
+    if (parseTiktokVtUrl(trimmed).isTiktokUrl) {
+      await executeTiktokVtLinkScan(trimmed);
+      return;
+    }
+
+    setVtInspectionResult(null);
     setActiveQuery(trimmed);
     setActiveView('search');
+    setEntries(initialSearchEntries);
     setIsLoading(true);
     const startedAt = Date.now();
 
@@ -378,9 +859,9 @@ export function PresetFinderWorkspace() {
     (activeView === 'search' && isLoading);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0d1117] text-[#e6edf3]">
-      {/* Top Bar Contract: 3 Zones separated by gap-8 (GitHub Dark Header) */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-4 sm:gap-8 px-4 sm:px-8 py-3 bg-[#161b22] border-b border-[#30363d]">
+    <div className="min-h-screen flex flex-col bg-[#F6F5F0] text-[#111111]">
+      {/* Top Bar Contract: 3 Zones separated by gap-8 (Neobrutalist Crisp White & Black Header) */}
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-4 sm:gap-8 px-4 sm:px-8 py-3 bg-white border-b-2 border-[#111111]">
         {/* Zone 1: Official Alight Motion Logo + Brand Name */}
         <a
           href="#top"
@@ -388,16 +869,16 @@ export function PresetFinderWorkspace() {
             e.preventDefault();
             setActiveView('beranda');
           }}
-          className="flex items-center gap-2.5 text-sm sm:text-base font-bold tracking-tight text-[#f0f6fc] whitespace-nowrap shrink-0"
+          className="flex items-center gap-2.5 text-lg sm:text-xl font-extrabold uppercase tracking-tight text-[#111111] whitespace-nowrap shrink-0"
           style={{fontFamily: 'var(--font-display), sans-serif'}}
         >
           <Image
             src="/assets/alight-motion-logo.jpg"
             alt="Alight Motion Logo"
-            width={28}
-            height={28}
+            width={30}
+            height={30}
             referrerPolicy="no-referrer"
-            className="rounded-md border border-[#30363d] shrink-0"
+            className="border-2 border-[#111111] shadow-[2px_2px_0px_#F7B91C] shrink-0"
           />
           <span>PresetFinder Studio</span>
         </a>
@@ -405,14 +886,14 @@ export function PresetFinderWorkspace() {
         {/* Zone 2: 4 concise single-line text navigation links */}
         <nav
           aria-label="Navigasi Utama"
-          className="hidden md:flex items-center gap-6 text-xs sm:text-sm font-medium text-[#8b949e]"
+          className="hidden md:flex items-center gap-6 text-xs sm:text-sm font-bold text-[#111111]/75"
         >
           <button
             type="button"
             onClick={() => setActiveView('beranda')}
-            className={`hover:text-[#f0f6fc] transition-colors whitespace-nowrap shrink-0 ${
+            className={`hover:text-[#111111] transition-colors whitespace-nowrap shrink-0 ${
               activeView === 'beranda'
-                ? 'text-[#f0f6fc] underline underline-offset-8 decoration-2 decoration-[#f78166] font-semibold'
+                ? 'text-[#111111] underline underline-offset-8 decoration-4 decoration-[#F25C05] font-extrabold'
                 : ''
             }`}
           >
@@ -421,9 +902,9 @@ export function PresetFinderWorkspace() {
           <button
             type="button"
             onClick={() => setActiveView('search')}
-            className={`hover:text-[#f0f6fc] transition-colors whitespace-nowrap shrink-0 ${
+            className={`hover:text-[#111111] transition-colors whitespace-nowrap shrink-0 ${
               activeView === 'search'
-                ? 'text-[#f0f6fc] underline underline-offset-8 decoration-2 decoration-[#f78166] font-semibold'
+                ? 'text-[#111111] underline underline-offset-8 decoration-4 decoration-[#F25C05] font-extrabold'
                 : ''
             }`}
           >
@@ -432,9 +913,9 @@ export function PresetFinderWorkspace() {
           <button
             type="button"
             onClick={() => setActiveView('saved')}
-            className={`hover:text-[#f0f6fc] transition-colors whitespace-nowrap shrink-0 ${
+            className={`hover:text-[#111111] transition-colors whitespace-nowrap shrink-0 ${
               activeView === 'saved'
-                ? 'text-[#f0f6fc] underline underline-offset-8 decoration-2 decoration-[#f78166] font-semibold'
+                ? 'text-[#111111] underline underline-offset-8 decoration-4 decoration-[#F25C05] font-extrabold'
                 : ''
             }`}
           >
@@ -442,32 +923,40 @@ export function PresetFinderWorkspace() {
           </button>
           <a
             href="#filter-rules"
-            className="hover:text-[#f0f6fc] transition-colors whitespace-nowrap shrink-0"
+            className="hover:text-[#111111] transition-colors whitespace-nowrap shrink-0"
           >
             Dokumentasi XML
           </a>
         </nav>
 
-        {/* Zone 3: Quick Search Jump (No Manual Extractor in Top Bar) */}
+        {/* Zone 3: Quick Search Jump (Split Neobrutalist Button) */}
         <div className="flex items-center shrink-0">
           <button
             type="button"
             onClick={() =>
               setActiveView(activeView === 'search' ? 'beranda' : 'search')
             }
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#c9d1d9] bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded-md transition-colors whitespace-nowrap shrink-0"
+            className="inline-flex items-stretch border-2 border-[#111111] shadow-[3px_3px_0px_#111111] bg-[#F7B91C] hover:bg-[#e8ab12] text-[#111111] transition-transform active:translate-x-0.5 active:translate-y-0.5 whitespace-nowrap shrink-0"
           >
-            {activeView === 'search' ? (
-              <>
-                <Flame className="w-3.5 h-3.5 text-[#f78166]" />
-                <span>Ke Beranda Tren</span>
-              </>
-            ) : (
-              <>
-                <Search className="w-3.5 h-3.5 text-[#58a6ff]" />
-                <span>Cari Sound VT</span>
-              </>
-            )}
+            <span
+              className="px-3 py-1.5 text-xs sm:text-sm font-extrabold uppercase tracking-wider flex items-center gap-1.5"
+              style={{fontFamily: 'var(--font-display), sans-serif'}}
+            >
+              {activeView === 'search' ? (
+                <>
+                  <Flame className="w-3.5 h-3.5 text-[#F25C05] fill-[#F25C05]" />
+                  <span>Ke Beranda Tren</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Cari Sound VT</span>
+                </>
+              )}
+            </span>
+            <span className="px-2 bg-[#111111] text-white flex items-center justify-center border-l-2 border-[#111111]">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </span>
           </button>
         </div>
       </header>
@@ -475,27 +964,28 @@ export function PresetFinderWorkspace() {
       {/* Main Content Container */}
       <main
         id="top"
-        className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4"
+        className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-7 space-y-5"
       >
-        {/* GitHub-Style Tab Switcher Bar */}
-        <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-1">
+        {/* Neobrutalist Tab Switcher Bar */}
+        <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-1.5">
           <div
             role="tablist"
             aria-label="Pilih Halaman Utama"
-            className="grid grid-cols-3 gap-1"
+            className="grid grid-cols-3 gap-1.5"
           >
             <button
               type="button"
               role="tab"
               aria-selected={activeView === 'beranda'}
               onClick={() => setActiveView('beranda')}
-              className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-extrabold uppercase tracking-wider border-2 transition-colors whitespace-nowrap ${
                 activeView === 'beranda'
-                  ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                  : 'text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d]/50'
+                  ? 'bg-[#F7B91C] text-[#111111] border-[#111111] shadow-[2px_2px_0px_#111111]'
+                  : 'bg-[#F6F5F0] text-[#111111]/75 border-transparent hover:border-[#111111] hover:text-[#111111]'
               }`}
+              style={{fontFamily: 'var(--font-display), sans-serif'}}
             >
-              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-[#f78166]" />
+              <Flame className="w-4 h-4 shrink-0 text-[#F25C05] fill-[#F25C05]" />
               <span className="sm:hidden">Beranda</span>
               <span className="hidden sm:inline">Beranda Trending</span>
             </button>
@@ -505,13 +995,14 @@ export function PresetFinderWorkspace() {
               role="tab"
               aria-selected={activeView === 'search'}
               onClick={() => setActiveView('search')}
-              className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-extrabold uppercase tracking-wider border-2 transition-colors whitespace-nowrap ${
                 activeView === 'search'
-                  ? 'bg-[#1f6feb] text-white'
-                  : 'text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d]/50'
+                  ? 'bg-[#F25C05] text-white border-[#111111] shadow-[2px_2px_0px_#111111]'
+                  : 'bg-[#F6F5F0] text-[#111111]/75 border-transparent hover:border-[#111111] hover:text-[#111111]'
               }`}
+              style={{fontFamily: 'var(--font-display), sans-serif'}}
             >
-              <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <Search className="w-4 h-4 shrink-0" />
               <span className="sm:hidden">Pencarian</span>
               <span className="hidden sm:inline">Pencarian Sound</span>
             </button>
@@ -521,94 +1012,123 @@ export function PresetFinderWorkspace() {
               role="tab"
               aria-selected={activeView === 'saved'}
               onClick={() => setActiveView('saved')}
-              className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-extrabold uppercase tracking-wider border-2 transition-colors whitespace-nowrap ${
                 activeView === 'saved'
-                  ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                  : 'text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d]/50'
+                  ? 'bg-[#111111] text-[#F7B91C] border-[#111111] shadow-[2px_2px_0px_#F25C05]'
+                  : 'bg-[#F6F5F0] text-[#111111]/75 border-transparent hover:border-[#111111] hover:text-[#111111]'
               }`}
+              style={{fontFamily: 'var(--font-display), sans-serif'}}
             >
-              <Bookmark className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-[#58a6ff]" />
+              <Bookmark className="w-4 h-4 shrink-0" />
               <span>Tersimpan ({savedEntries.length})</span>
             </button>
           </div>
         </div>
 
-        {/* Simple, Centered, Non-Intrusive Developer Credit & Official Channel Strip */}
-        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-3 py-1 text-center text-xs text-[#8b949e]">
+        {/* Centered Developer Credit & Official Channel Strip */}
+        <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-3 py-1.5 text-center text-xs font-medium text-[#111111]/80">
           <span>
             Developer:{' '}
-            <strong className="font-semibold text-[#f0f6fc] tracking-tight">
+            <strong className="font-extrabold text-[#111111] tracking-tight">
               SANN404 FORUM GROUP
             </strong>
           </span>
-          <span aria-hidden="true" className="text-[#30363d]">
+          <span aria-hidden="true" className="text-[#111111]">
             ·
           </span>
           <a
             href="https://whatsapp.com/channel/0029Vb6ukqnHQbS4mKP0j80L"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-medium text-[#3fb950] hover:underline transition-colors"
+            className="inline-flex items-center gap-1 font-bold text-[#F25C05] underline decoration-2 underline-offset-2 hover:bg-[#F7B91C] hover:text-[#111111] px-1 transition-colors"
           >
             <span>Saluran Resmi WhatsApp</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>
 
-        {/* GitHub-Style 2-Column Layout: Left Sidebar (Logo + Category Filters + Manual Extractor) + Right Main Repository Results */}
-        <div className="grid grid-cols-1 lg:grid-cols-[270px_1fr] gap-5 items-start">
-          {/* LEFT SIDEBAR: Official Alight Motion Logo Top Card, Category Filter, Platform/Link Filters, and Relocated Manual Extractor */}
-          <aside className="space-y-4 lg:sticky lg:top-16">
-            {/* Top Sidebar Card: Official Alight Motion Identity */}
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <Image
-                  src="/assets/alight-motion-logo.jpg"
-                  alt="Alight Motion Official Logo"
-                  width={44}
-                  height={44}
-                  referrerPolicy="no-referrer"
-                  className="rounded-xl border border-[#30363d] shrink-0"
-                />
+        {/* Neobrutalist 2-Column Layout: Left Sidebar + Right Main Repository Results */}
+        <div className="grid grid-cols-1 lg:grid-cols-[285px_1fr] gap-6 items-start">
+          {/* LEFT SIDEBAR */}
+          <aside className="space-y-5 lg:sticky lg:top-16">
+            {/* Top Sidebar Card: Official Alight Motion Identity with Circular Vector Emblem (like Screen 3 in IMG_1220.jpeg) */}
+            <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-4 space-y-3 relative overflow-hidden">
+              {/* Top-Right Halftone Dot Grid */}
+              <div
+                aria-hidden="true"
+                className="absolute top-3 right-3 w-7 h-7 opacity-80"
+                style={{
+                  backgroundImage: 'radial-gradient(#111111 1.25px, transparent 1.25px)',
+                  backgroundSize: '4.5px 4.5px',
+                }}
+              />
+
+              <div className="flex items-center gap-3 pr-8">
+                <div className="relative w-12 h-12 rounded-full border-2 border-[#111111] bg-[#F7B91C] flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#111111]">
+                  <Image
+                    src="/assets/alight-motion-logo.jpg"
+                    alt="Alight Motion Official Logo"
+                    width={34}
+                    height={34}
+                    referrerPolicy="no-referrer"
+                    className="rounded-full border border-[#111111]"
+                  />
+                </div>
                 <div className="min-w-0">
-                  <h2 className="text-sm font-bold text-[#f0f6fc] truncate">
+                  <h2
+                    className="text-base font-extrabold uppercase tracking-tight text-[#111111] truncate"
+                    style={{fontFamily: 'var(--font-display), sans-serif'}}
+                  >
                     Alight Motion Hub
                   </h2>
-                  <p className="text-xs text-[#8b949e] truncate">
+                  <p className="text-xs font-bold text-[#F25C05] truncate">
                     Preset &amp; Sound VT Index
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-[#8b949e] leading-relaxed">
-                Indeks repositori link preset <span className="text-[#e6edf3]">5MB</span>,{' '}
-                <span className="text-[#e6edf3]">XML Drive</span>, dan{' '}
-                <span className="text-[#e6edf3]">Sound</span> dari kreator VT TikTok &amp; YouTube.
+
+              <p className="text-xs text-[#111111]/80 font-medium leading-relaxed border-t-2 border-dashed border-[#111111]/25 pt-2.5">
+                Indeks repositori link preset{' '}
+                <strong className="bg-[#F7B91C] px-1 border border-[#111111] text-[#111111]">
+                  5MB
+                </strong>
+                ,{' '}
+                <strong className="bg-[#F6F5F0] px-1 border border-[#111111] text-[#111111]">
+                  XML Drive
+                </strong>
+                , dan{' '}
+                <strong className="bg-[#F6F5F0] px-1 border border-[#111111] text-[#111111]">
+                  Sound
+                </strong>{' '}
+                dari kreator VT TikTok &amp; YouTube.
               </p>
             </div>
 
-            {/* Category Filter Card ('JJ Presets', 'Cinematic', 'Color Grading', 'Velocity', 'Gameplay') */}
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3.5 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#8b949e] flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-[#58a6ff]" />
+            {/* Category Filter Card (Styled like "SELECT YOUR RIDE" Stack in IMG_1220.jpeg: active card turns Yellow #F7B91C with black check circle) */}
+            <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-4 space-y-3">
+              <div className="flex items-center justify-between border-b-2 border-[#111111] pb-2">
+                <h3
+                  className="text-sm font-extrabold uppercase tracking-wider text-[#111111] flex items-center gap-1.5"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
+                >
+                  <Layers className="w-4 h-4 text-[#F25C05]" />
                   <span>Filter Kategori Preset</span>
                 </h3>
                 {categoryFilter !== 'all' && (
                   <button
                     type="button"
                     onClick={() => setCategoryFilter('all')}
-                    className="text-[11px] text-[#58a6ff] hover:underline"
+                    className="px-2 py-0.5 text-[11px] font-bold bg-[#F6F5F0] border border-[#111111] text-[#111111] hover:bg-[#F7B91C]"
                   >
                     Reset
                   </button>
                 )}
               </div>
 
-              {/* Desktop Vertical List & Mobile 2-Col Grid */}
               <div
                 role="group"
                 aria-label="Filter Kategori Preset"
-                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1"
+                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2"
               >
                 {PRESET_CATEGORIES.map((cat) => {
                   const isSelected = categoryFilter === cat.id;
@@ -618,21 +1138,38 @@ export function PresetFinderWorkspace() {
                       key={cat.id}
                       type="button"
                       onClick={() => handleSelectSidebarCategory(cat.id)}
-                      className={`flex items-center justify-between gap-2 px-2.5 py-2 text-xs rounded-md border transition-colors text-left ${
+                      className={`flex items-center justify-between gap-2 px-3 py-2.5 text-xs border-2 border-[#111111] transition-all text-left ${
                         isSelected
-                          ? 'bg-[#1f6feb]/20 text-[#f0f6fc] border-[#1f6feb] font-semibold'
-                          : 'bg-[#0d1117]/60 text-[#c9d1d9] border-transparent hover:bg-[#21262d] hover:text-[#f0f6fc]'
+                          ? 'bg-[#F7B91C] text-[#111111] font-extrabold shadow-[3px_3px_0px_#111111]'
+                          : 'bg-white text-[#111111] font-semibold hover:bg-[#F6F5F0]'
                       }`}
                     >
                       <span className="flex items-center gap-2 min-w-0 truncate">
                         <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          className="w-3 h-3 border border-[#111111] shrink-0"
                           style={{backgroundColor: cat.dotColor}}
                         />
-                        <span className="truncate">{cat.label}</span>
+                        <span
+                          className="truncate uppercase tracking-wide text-xs sm:text-sm"
+                          style={{fontFamily: 'var(--font-display), sans-serif'}}
+                        >
+                          {cat.label}
+                        </span>
                       </span>
-                      <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#21262d] text-[#8b949e] tabular-nums shrink-0">
-                        {count}
+
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        <span className="font-mono text-xs font-bold px-1.5 py-0.5 bg-white border border-[#111111] text-[#111111] tabular-nums">
+                          {count}
+                        </span>
+                        {/* Radio / Check circle exactly like IMG_1220.jpeg */}
+                        <span
+                          className={`w-4 h-4 rounded-full border-2 border-[#111111] flex items-center justify-center ${
+                            isSelected ? 'bg-[#111111] text-white' : 'bg-white'
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                        </span>
                       </span>
                     </button>
                   );
@@ -641,23 +1178,26 @@ export function PresetFinderWorkspace() {
             </div>
 
             {/* Platform & Link Type Filters inside Sidebar */}
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3.5 space-y-3">
+            <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-4 space-y-3.5">
               <div className="space-y-1.5">
-                <span className="text-xs font-semibold text-[#8b949e] block">
+                <span
+                  className="text-xs font-extrabold uppercase tracking-wider text-[#111111] block"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
+                >
                   Platform Sumber VT
                 </span>
                 <div
                   role="group"
                   aria-label="Filter Platform"
-                  className="grid grid-cols-3 gap-1 p-1 bg-[#0d1117] border border-[#30363d] rounded-md"
+                  className="grid grid-cols-3 gap-1.5"
                 >
                   <button
                     type="button"
                     onClick={() => setPlatformFilter('all')}
-                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors text-center ${
+                    className={`px-2 py-1.5 text-xs font-bold border-2 border-[#111111] transition-colors text-center ${
                       platformFilter === 'all'
-                        ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                        : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                        ? 'bg-[#111111] text-[#F7B91C]'
+                        : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]'
                     }`}
                   >
                     Semua
@@ -665,10 +1205,10 @@ export function PresetFinderWorkspace() {
                   <button
                     type="button"
                     onClick={() => setPlatformFilter('tiktok')}
-                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors text-center ${
+                    className={`px-2 py-1.5 text-xs font-bold border-2 border-[#111111] transition-colors text-center ${
                       platformFilter === 'tiktok'
-                        ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                        : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                        ? 'bg-[#111111] text-[#F7B91C]'
+                        : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]'
                     }`}
                   >
                     TikTok
@@ -676,10 +1216,10 @@ export function PresetFinderWorkspace() {
                   <button
                     type="button"
                     onClick={() => setPlatformFilter('youtube')}
-                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors text-center ${
+                    className={`px-2 py-1.5 text-xs font-bold border-2 border-[#111111] transition-colors text-center ${
                       platformFilter === 'youtube'
-                        ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                        : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                        ? 'bg-[#111111] text-[#F7B91C]'
+                        : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]'
                     }`}
                   >
                     YouTube
@@ -688,21 +1228,24 @@ export function PresetFinderWorkspace() {
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-xs font-semibold text-[#8b949e] block">
+                <span
+                  className="text-xs font-extrabold uppercase tracking-wider text-[#111111] block"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
+                >
                   Jenis File Preset
                 </span>
                 <div
                   role="group"
                   aria-label="Filter Jenis Link"
-                  className="grid grid-cols-2 gap-1 p-1 bg-[#0d1117] border border-[#30363d] rounded-md"
+                  className="grid grid-cols-2 gap-1.5"
                 >
                   <button
                     type="button"
                     onClick={() => setLinkTypeFilter('all')}
-                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors text-center ${
+                    className={`px-2 py-1.5 text-xs font-bold border-2 border-[#111111] transition-colors text-center ${
                       linkTypeFilter === 'all'
-                        ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                        : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                        ? 'bg-[#F7B91C] text-[#111111] shadow-[2px_2px_0px_#111111]'
+                        : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]/50'
                     }`}
                   >
                     Semua Link
@@ -710,10 +1253,10 @@ export function PresetFinderWorkspace() {
                   <button
                     type="button"
                     onClick={() => setLinkTypeFilter('am_5mb')}
-                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors text-center ${
+                    className={`px-2 py-1.5 text-xs font-bold border-2 border-[#111111] transition-colors text-center ${
                       linkTypeFilter === 'am_5mb'
-                        ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                        : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                        ? 'bg-[#F7B91C] text-[#111111] shadow-[2px_2px_0px_#111111]'
+                        : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]/50'
                     }`}
                   >
                     Prst 5MB
@@ -721,10 +1264,10 @@ export function PresetFinderWorkspace() {
                   <button
                     type="button"
                     onClick={() => setLinkTypeFilter('xml_drive')}
-                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors text-center ${
+                    className={`px-2 py-1.5 text-xs font-bold border-2 border-[#111111] transition-colors text-center ${
                       linkTypeFilter === 'xml_drive'
-                        ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                        : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                        ? 'bg-[#F7B91C] text-[#111111] shadow-[2px_2px_0px_#111111]'
+                        : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]/50'
                     }`}
                   >
                     Prst XML
@@ -732,10 +1275,10 @@ export function PresetFinderWorkspace() {
                   <button
                     type="button"
                     onClick={() => setLinkTypeFilter('sound_audio')}
-                    className={`px-2 py-1.5 text-xs font-medium rounded transition-colors text-center ${
+                    className={`px-2 py-1.5 text-xs font-bold border-2 border-[#111111] transition-colors text-center ${
                       linkTypeFilter === 'sound_audio'
-                        ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d]'
-                        : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                        ? 'bg-[#F7B91C] text-[#111111] shadow-[2px_2px_0px_#111111]'
+                        : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]/50'
                     }`}
                   >
                     Sound Audio
@@ -744,94 +1287,144 @@ export function PresetFinderWorkspace() {
               </div>
             </div>
 
-            {/* Relocated Manual Comment Extractor Card (Moved from Top Bar to Sidebar) */}
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3.5 space-y-2.5">
-              <h3 className="text-xs font-semibold text-[#f0f6fc]">
-                Ekstraktor Komentar Manual
-              </h3>
-              <p className="text-xs text-[#8b949e] leading-relaxed">
+            {/* Manual Comment Extractor Card with Neobrutalist Split CTA */}
+            <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3
+                  className="text-sm font-extrabold uppercase tracking-wider text-[#111111]"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
+                >
+                  Ekstraktor Komentar Manual
+                </h3>
+                <span className="w-3 h-3 bg-[#F25C05] border border-[#111111]" />
+              </div>
+              <p className="text-xs text-[#111111]/80 font-medium leading-relaxed">
                 Punya teks komentar atau deskripsi VT sendiri? Tempel dan saring otomatis link 5MB,
                 XML, &amp; Sound.
               </p>
               <button
                 type="button"
                 onClick={() => setIsExtractorOpen(true)}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-[#f0f6fc] bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded-md transition-colors"
+                className="w-full inline-flex items-stretch justify-between border-2 border-[#111111] shadow-[3px_3px_0px_#111111] bg-[#F7B91C] hover:bg-[#e5a812] text-[#111111] transition-transform active:translate-x-0.5 active:translate-y-0.5"
               >
-                <Plus className="w-3.5 h-3.5 text-[#3fb950]" />
-                <span>Filter Komentar Manual</span>
+                <span
+                  className="px-3 py-2 text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Filter Komentar Manual</span>
+                </span>
+                <span className="px-2.5 bg-[#111111] text-white flex items-center justify-center border-l-2 border-[#111111]">
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </span>
               </button>
             </div>
           </aside>
 
-          {/* RIGHT MAIN COLUMN: Search / Trending Header + GitHub Open-Source Repository Style Result List */}
-          <div className="space-y-4 min-w-0">
-            {/* VIEW 1: BERANDA TRENDING REALTIME HEADER */}
+          {/* RIGHT MAIN COLUMN */}
+          <div className="space-y-5 min-w-0">
+            {/* VIEW 1: BERANDA TRENDING REALTIME HEADER (Matches "SELECT YOUR RIDE" Hero in IMG_1220.jpeg) */}
             {activeView === 'beranda' && (
-              <section className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 sm:p-5 space-y-4">
-                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                  <div className="space-y-1.5 max-w-2xl">
+              <section className="bg-white border-2 border-[#111111] shadow-[6px_6px_0px_#111111] p-5 sm:p-6 space-y-4 relative overflow-hidden">
+                {/* Top-right Halftone Dot Matrix Pattern from IMG_1220.jpeg */}
+                <div
+                  aria-hidden="true"
+                  className="hidden sm:block absolute top-4 right-4 w-11 h-11 opacity-85"
+                  style={{
+                    backgroundImage: 'radial-gradient(#111111 1.5px, transparent 1.5px)',
+                    backgroundSize: '6px 6px',
+                  }}
+                />
+
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+                  <div className="space-y-2 max-w-xl">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="inline-flex items-center gap-1.5 font-semibold text-[#f78166]">
-                        <Radio className="w-3.5 h-3.5 animate-pulse" />
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#F25C05] text-white border border-[#111111] font-extrabold uppercase tracking-wider">
+                        <Radio className="w-3.5 h-3.5" />
                         <span>LIVE TRENDING REPOSITORIES</span>
                       </span>
-                      <span aria-hidden="true" className="text-[#30363d]">
-                        ·
-                      </span>
-                      <span className="text-[#8b949e] font-mono tabular-nums">
+                      <span className="text-[#111111]/75 font-mono font-bold tabular-nums">
                         Update terakhir:{' '}
-                        <strong className="text-[#f0f6fc]">{lastTrendingSync}</strong>
+                        <strong className="text-[#111111] underline decoration-[#F7B91C] decoration-2">
+                          {lastTrendingSync}
+                        </strong>
                       </span>
                     </div>
 
-                    <h1
-                      className="text-lg sm:text-2xl font-bold text-[#f0f6fc] tracking-tight leading-snug"
-                      style={{
-                        fontFamily: 'var(--font-display), sans-serif',
-                        textWrap: 'balance',
-                      }}
-                    >
-                      Beranda Preset Trending Realtime dengan Like Terbanyak
-                    </h1>
+                    <div className="flex items-start gap-3">
+                      <h1
+                        className="text-2xl sm:text-4xl font-extrabold uppercase text-[#111111] tracking-tight leading-[1.05]"
+                        style={{
+                          fontFamily: 'var(--font-display), sans-serif',
+                          textWrap: 'balance',
+                        }}
+                      >
+                        Beranda Preset Trending Realtime dengan Like Terbanyak
+                      </h1>
+                      {/* Signature Diagonal Yellow & Black Touching Squares from IMG_1220.jpeg */}
+                      <div className="relative w-8 h-8 shrink-0 mt-1 hidden sm:block" aria-hidden="true">
+                        <span className="absolute top-0 left-0 w-4 h-4 bg-[#F7B91C] border border-[#111111]" />
+                        <span className="absolute bottom-0 right-0 w-4 h-4 bg-[#111111]" />
+                      </div>
+                    </div>
 
-                    <p className="text-xs sm:text-sm text-[#8b949e] leading-relaxed">
+                    <p className="text-xs sm:text-sm text-[#111111]/80 font-medium leading-relaxed">
                       Daftar repositori VT preset Alight Motion yang sedang viral di TikTok &amp;
                       YouTube saat ini, diurutkan otomatis berdasarkan jumlah{' '}
-                      <strong className="text-[#f0f6fc]">Like terbanyak</strong>.
+                      <strong className="font-extrabold text-[#111111] bg-[#F7B91C]/50 px-1">
+                        Like terbanyak
+                      </strong>
+                      .
                     </p>
+
+                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => fetchTrendingRealtime(trendingCategory, true)}
+                        disabled={isTrendingLoading}
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-extrabold uppercase tracking-wider text-[#111111] bg-white hover:bg-[#F6F5F0] border-2 border-[#111111] shadow-[3px_3px_0px_#111111] disabled:opacity-60 transition-colors whitespace-nowrap"
+                        style={{fontFamily: 'var(--font-display), sans-serif'}}
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${
+                            isTrendingLoading ? 'animate-spin text-[#F25C05]' : ''
+                          }`}
+                        />
+                        <span>{isTrendingLoading ? 'Menyinkronkan...' : 'Perbarui Tren'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveView('search')}
+                        className="inline-flex items-stretch border-2 border-[#111111] shadow-[3px_3px_0px_#111111] bg-[#F7B91C] hover:bg-[#e5a812] text-[#111111] transition-transform active:translate-x-0.5 active:translate-y-0.5 whitespace-nowrap"
+                      >
+                        <span
+                          className="px-3.5 py-2 text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5"
+                          style={{fontFamily: 'var(--font-display), sans-serif'}}
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                          <span>Cari Sound Spesifik</span>
+                        </span>
+                        <span className="px-2.5 bg-[#111111] text-white flex items-center justify-center border-l-2 border-[#111111]">
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => fetchTrendingRealtime(trendingCategory, true)}
-                      disabled={isTrendingLoading}
-                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-[#c9d1d9] bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] disabled:opacity-60 rounded-md transition-colors whitespace-nowrap"
-                    >
-                      <RefreshCw
-                        className={`w-3.5 h-3.5 ${
-                          isTrendingLoading ? 'animate-spin text-[#58a6ff]' : ''
-                        }`}
-                      />
-                      <span>{isTrendingLoading ? 'Menyinkronkan...' : 'Perbarui Tren'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveView('search')}
-                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-[#238636] hover:bg-[#2ea043] rounded-md transition-colors whitespace-nowrap"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                      <span>Cari Sound Spesifik</span>
-                    </button>
+                  {/* Neobrutalist Yellow/Black Cruiser Illustration */}
+                  <div className="flex justify-center xl:justify-end xl:pr-6">
+                    <NeobrutalistHeroIllustration />
                   </div>
                 </div>
 
-                {/* Trending Topics / Sound Categories (GitHub Explore Topics style) */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#30363d]">
+                {/* Trending Topics Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t-2 border-[#111111]">
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
-                    <span className="text-xs text-[#8b949e] whitespace-nowrap shrink-0 mr-1">
+                    <span
+                      className="text-xs font-extrabold uppercase tracking-wider text-[#111111] whitespace-nowrap shrink-0 mr-1"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
                       Topik Tren:
                     </span>
                     {TRENDING_CATEGORIES.map((cat) => (
@@ -839,10 +1432,10 @@ export function PresetFinderWorkspace() {
                         key={cat.id}
                         type="button"
                         onClick={() => handleSelectTrendingCategory(cat.id)}
-                        className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors whitespace-nowrap shrink-0 ${
+                        className={`px-3 py-1 text-xs font-bold border-2 border-[#111111] transition-colors whitespace-nowrap shrink-0 ${
                           trendingCategory === cat.id
-                            ? 'bg-[#1f6feb] text-white border-[#1f6feb]'
-                            : 'bg-[#1f6feb]/10 text-[#58a6ff] border-[#1f6feb]/30 hover:bg-[#1f6feb]/20'
+                            ? 'bg-[#111111] text-[#F7B91C] shadow-[2px_2px_0px_#F25C05]'
+                            : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]'
                         }`}
                       >
                         #{cat.label.toLowerCase().replace(/\s+/g, '-')}
@@ -850,12 +1443,12 @@ export function PresetFinderWorkspace() {
                     ))}
                   </div>
 
-                  <label className="inline-flex items-center gap-2 text-xs text-[#8b949e] cursor-pointer select-none">
+                  <label className="inline-flex items-center gap-2 text-xs font-bold text-[#111111] cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={isAutoRealtime}
                       onChange={(e) => setIsAutoRealtime(e.target.checked)}
-                      className="rounded border-[#30363d] bg-[#0d1117] text-[#238636] focus:ring-[#58a6ff]"
+                      className="w-4 h-4 accent-[#111111] border-2 border-[#111111]"
                     />
                     <span>Auto-Update Realtime (45 dtk)</span>
                   </label>
@@ -863,16 +1456,25 @@ export function PresetFinderWorkspace() {
               </section>
             )}
 
-            {/* VIEW 2: PENCARIAN SOUND HEADER (GitHub Repository Search Bar & Explore Topics) */}
+            {/* VIEW 2: PENCARIAN SOUND HEADER */}
             {activeView === 'search' && (
-              <section className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 sm:p-5 space-y-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-[#58a6ff] font-mono">
+              <section className="bg-white border-2 border-[#111111] shadow-[6px_6px_0px_#111111] p-5 sm:p-6 space-y-4 relative overflow-hidden">
+                <div
+                  aria-hidden="true"
+                  className="hidden sm:block absolute top-4 right-4 w-11 h-11 opacity-85"
+                  style={{
+                    backgroundImage: 'radial-gradient(#111111 1.5px, transparent 1.5px)',
+                    backgroundSize: '6px 6px',
+                  }}
+                />
+
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#F7B91C] border border-[#111111] text-xs text-[#111111] font-mono font-bold">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>GitHub-Style Preset Repository Search · Tanpa Batas Hasil</span>
+                    <span>PRESET REPOSITORY SEARCH · TANPA BATAS HASIL</span>
                   </div>
                   <h1
-                    className="text-lg sm:text-2xl font-bold text-[#f0f6fc] tracking-tight leading-snug"
+                    className="text-2xl sm:text-4xl font-extrabold uppercase text-[#111111] tracking-tight leading-[1.05]"
                     style={{
                       fontFamily: 'var(--font-display), sans-serif',
                       textWrap: 'balance',
@@ -880,31 +1482,33 @@ export function PresetFinderWorkspace() {
                   >
                     Cari Nama Sound &amp; Filter Kategori Preset Alight Motion
                   </h1>
-                  <p className="text-xs sm:text-sm text-[#8b949e] leading-relaxed">
+                  <p className="text-xs sm:text-sm text-[#111111]/80 font-medium leading-relaxed">
                     Ketik nama sound seperti{' '}
-                    <strong className="text-[#f0f6fc]">“kicau mania”</strong> lalu pilih kategori{' '}
-                    <span className="text-[#58a6ff]">JJ Presets</span>,{' '}
-                    <span className="text-[#a371f7]">Cinematic</span>, atau{' '}
-                    <span className="text-[#d29922]">Color Grading</span> untuk menyaring seluruh
-                    link preset secara instan.
+                    <strong className="text-[#111111] bg-[#F7B91C]/60 px-1">“kicau mania”</strong>{' '}
+                    lalu pilih kategori{' '}
+                    <span className="font-bold underline decoration-[#F25C05]">JJ Presets</span>,{' '}
+                    <span className="font-bold underline decoration-[#F7B91C]">Cinematic</span>,
+                    atau{' '}
+                    <span className="font-bold underline decoration-[#111111]">Color Grading</span>{' '}
+                    untuk menyaring seluruh link preset secara instan.
                   </p>
                 </div>
 
-                {/* GitHub Search Input Form */}
+                {/* Search Input Form */}
                 <form onSubmit={handleSearchSubmit} className="space-y-3">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                     <div className="relative flex-1">
                       <label htmlFor="sound-search-input" className="sr-only">
                         Cari nama sound atau VT preset
                       </label>
-                      <Search className="w-4 h-4 text-[#8b949e] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Search className="w-4 h-4 text-[#111111] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         id="sound-search-input"
                         type="text"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         placeholder="Cari repositori sound preset (contoh: kicau mania)..."
-                        className="w-full pl-10 pr-9 py-2 text-sm bg-[#0d1117] border border-[#30363d] rounded-md text-[#f0f6fc] placeholder:text-[#8b949e] focus:outline-none focus:ring-2 focus:ring-[#58a6ff]"
+                        className="w-full pl-10 pr-9 py-2.5 text-sm font-bold bg-[#F6F5F0] border-2 border-[#111111] shadow-[3px_3px_0px_#111111] text-[#111111] placeholder:text-[#111111]/50 focus:outline-none focus:bg-white"
                       />
                       {searchInput && (
                         <button
@@ -914,7 +1518,7 @@ export function PresetFinderWorkspace() {
                             executeSearch('');
                           }}
                           aria-label="Bersihkan kata kunci pencarian"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#8b949e] hover:text-[#f0f6fc] rounded"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#111111] hover:bg-[#F7B91C]"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -924,22 +1528,33 @@ export function PresetFinderWorkspace() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#238636] hover:bg-[#2ea043] disabled:opacity-60 rounded-md transition-colors whitespace-nowrap shrink-0 min-h-[38px]"
+                      className="flex items-stretch justify-between border-2 border-[#111111] shadow-[3px_3px_0px_#111111] bg-[#F25C05] hover:bg-[#d94e00] disabled:opacity-60 text-white transition-transform active:translate-x-0.5 active:translate-y-0.5 whitespace-nowrap shrink-0 h-[42px]"
                     >
-                      {isLoading ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Memindai VT...</span>
-                        </>
-                      ) : (
-                        <span>Cari Semua Preset</span>
-                      )}
+                      <span
+                        className="flex-1 px-4 text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-2"
+                        style={{fontFamily: 'var(--font-display), sans-serif'}}
+                      >
+                        {isLoading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Memindai VT...</span>
+                          </>
+                        ) : (
+                          <span>Cari Semua Preset</span>
+                        )}
+                      </span>
+                      <span className="w-10 shrink-0 bg-[#111111] text-white flex items-center justify-center border-l-2 border-[#111111]">
+                        <ArrowRight className="w-4 h-4" />
+                      </span>
                     </button>
                   </div>
 
-                  {/* GitHub-Style Recommended Sound Topics */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                    <span className="text-[#8b949e] whitespace-nowrap shrink-0 mr-1">
+                  {/* Recommended Sound Topics */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs pt-1">
+                    <span
+                      className="text-[#111111] font-extrabold uppercase tracking-wider whitespace-nowrap shrink-0 mr-1"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
                       Rekomendasi Topik:
                     </span>
                     {POPULAR_SOUND_SUGGESTIONS.map((sound) => (
@@ -950,11 +1565,11 @@ export function PresetFinderWorkspace() {
                           setSearchInput(sound);
                           executeSearch(sound);
                         }}
-                        className={`px-2.5 py-1 rounded-full border font-mono text-[11px] transition-colors whitespace-nowrap shrink-0 ${
+                        className={`px-2.5 py-1 border-2 border-[#111111] font-mono text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 ${
                           activeQuery.toLowerCase() === sound.toLowerCase() &&
                           activeView === 'search'
-                            ? 'bg-[#1f6feb] text-white border-[#1f6feb] font-semibold'
-                            : 'bg-[#1f6feb]/10 text-[#58a6ff] border-[#1f6feb]/30 hover:bg-[#1f6feb]/20'
+                            ? 'bg-[#F7B91C] text-[#111111] shadow-[2px_2px_0px_#111111]'
+                            : 'bg-[#F6F5F0] text-[#111111] hover:bg-[#F7B91C]'
                         }`}
                       >
                         #{sound.replace(/\s+/g, '-')}
@@ -966,10 +1581,10 @@ export function PresetFinderWorkspace() {
                         setSearchInput('');
                         executeSearch('');
                       }}
-                      className={`px-2.5 py-1 rounded-full border font-mono text-[11px] transition-colors whitespace-nowrap shrink-0 ${
+                      className={`px-2.5 py-1 border-2 border-[#111111] font-mono text-[11px] font-bold transition-colors whitespace-nowrap shrink-0 ${
                         activeQuery === '' && activeView === 'search'
-                          ? 'bg-[#1f6feb] text-white border-[#1f6feb] font-semibold'
-                          : 'bg-[#21262d] text-[#c9d1d9] border-[#30363d] hover:bg-[#30363d]'
+                          ? 'bg-[#F7B91C] text-[#111111] shadow-[2px_2px_0px_#111111]'
+                          : 'bg-white text-[#111111] hover:bg-[#F7B91C]'
                       }`}
                     >
                       #semua-sound ({entries.length})
@@ -979,17 +1594,210 @@ export function PresetFinderWorkspace() {
               </section>
             )}
 
-            {/* GitHub Search Result Count & Sort Header Bar */}
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[#c9d1d9]">
-                <strong className="text-[#f0f6fc] font-mono tabular-nums text-sm">
+            {/* FITUR BARU: CARI & FILTER BERDASARKAN LINK VT TIKTOK (Visible on Beranda & Pencarian) */}
+            {activeView !== 'saved' && (
+              <section
+                aria-label="Cari Berdasarkan Link VT TikTok"
+                className="bg-white border-2 border-[#111111] shadow-[5px_5px_0px_#111111] p-4 sm:p-5 space-y-3.5 relative overflow-hidden"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-[#111111] pb-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#111111] text-[#F7B91C] border border-[#111111] text-[11px] font-mono font-extrabold uppercase tracking-wider">
+                      <Link2 className="w-3.5 h-3.5" />
+                      <span>FITUR SCAN LINK VT TIKTOK</span>
+                    </span>
+                    <h2
+                      className="text-base sm:text-xl font-extrabold uppercase tracking-tight text-[#111111]"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
+                      Cari Preset Berdasarkan Link VT TikTok
+                    </h2>
+                  </div>
+
+                  {vtInspectionResult && (
+                    <button
+                      type="button"
+                      onClick={handleClearVtLinkScan}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-[#F6F5F0] hover:bg-[#F7B91C] text-[#111111] border-2 border-[#111111] self-start sm:self-auto"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Reset Scan VT</span>
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-xs text-[#111111]/80 font-medium leading-relaxed">
+                  Masukkan link VT TikTok (contoh:{' '}
+                  <span className="font-mono font-bold text-[#111111] bg-[#F6F5F0] px-1 border border-[#111111]/30">
+                    https://www.tiktok.com/@user/video/...
+                  </span>{' '}
+                  atau{' '}
+                  <span className="font-mono font-bold text-[#111111] bg-[#F6F5F0] px-1 border border-[#111111]/30">
+                    https://vt.tiktok.com/...
+                  </span>
+                  ). Sistem otomatis memindai &amp; memfilter seluruh link preset (5MB, XML Drive,
+                  &amp; Sound) di deskripsi serta komentar VT tersebut.
+                </p>
+
+                <form onSubmit={handleVtLinkSubmit} className="space-y-2.5">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <div className="relative flex-1">
+                      <label htmlFor="tiktok-vt-url-input" className="sr-only">
+                        Masukkan Link VT TikTok
+                      </label>
+                      <Link2 className="w-4 h-4 text-[#111111] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        id="tiktok-vt-url-input"
+                        type="text"
+                        value={vtLinkInput}
+                        onChange={(e) => setVtLinkInput(e.target.value)}
+                        placeholder="Tempel link VT TikTok di sini (contoh: https://www.tiktok.com/@vkriedtz2/video/7696828668445756692)..."
+                        className="w-full pl-10 pr-9 py-2.5 text-xs sm:text-sm font-mono font-bold bg-[#F6F5F0] border-2 border-[#111111] shadow-[3px_3px_0px_#111111] text-[#111111] placeholder:text-[#111111]/50 focus:outline-none focus:bg-white"
+                      />
+                      {vtLinkInput && (
+                        <button
+                          type="button"
+                          onClick={handleClearVtLinkScan}
+                          aria-label="Hapus link VT TikTok"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#111111] hover:bg-[#F7B91C]"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading || !vtLinkInput.trim()}
+                      className="flex items-stretch justify-between border-2 border-[#111111] shadow-[3px_3px_0px_#111111] bg-[#F7B91C] hover:bg-[#e5a812] disabled:opacity-60 text-[#111111] transition-transform active:translate-x-0.5 active:translate-y-0.5 whitespace-nowrap shrink-0 h-[42px]"
+                    >
+                      <span
+                        className="flex-1 px-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                        style={{fontFamily: 'var(--font-display), sans-serif'}}
+                      >
+                        <Search className="w-3.5 h-3.5 shrink-0" />
+                        <span>Scan Link VT TikTok</span>
+                      </span>
+                      <span className="w-9 shrink-0 bg-[#111111] text-white flex items-center justify-center border-l-2 border-[#111111]">
+                        <ArrowRight className="w-4 h-4" />
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Quick Test VT Link Buttons (Positive & Negative Examples) */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-xs">
+                    <span
+                      className="text-[#111111] font-extrabold uppercase tracking-wider whitespace-nowrap shrink-0 mr-1"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
+                      Uji Cepat Link VT:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        executeTiktokVtLinkScan(
+                          'https://www.tiktok.com/@vkriedtz2/video/7696828668445756692'
+                        )
+                      }
+                      className="px-2.5 py-1 border-2 border-[#111111] bg-[#F6F5F0] hover:bg-[#F7B91C] text-[#111111] font-mono text-[11px] font-bold transition-colors whitespace-nowrap"
+                    >
+                      VT Ada Preset (@vkriedtz2)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        executeTiktokVtLinkScan(
+                          'https://www.tiktok.com/@wyxzwangyy/video/7696828668445756692'
+                        )
+                      }
+                      className="px-2.5 py-1 border-2 border-[#111111] bg-[#F6F5F0] hover:bg-[#F7B91C] text-[#111111] font-mono text-[11px] font-bold transition-colors whitespace-nowrap"
+                    >
+                      VT Multi-Preset (@wyxzwangyy)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        executeTiktokVtLinkScan(
+                          'https://www.tiktok.com/@dailyvlog_random/video/7106594312292453675'
+                        )
+                      }
+                      className="px-2.5 py-1 border-2 border-[#111111] bg-white hover:bg-[#F25C05] hover:text-white text-[#111111] font-mono text-[11px] font-bold transition-colors whitespace-nowrap"
+                    >
+                      VT Tanpa Preset (Tes Feedback Kosong)
+                    </button>
+                  </div>
+                </form>
+
+                {/* Active VT Scan Status Banner (Both Found & Not Found Feedback Directly Visible) */}
+                {vtInspectionResult &&
+                  (vtInspectionResult.hasPresetLinks ? (
+                    <div
+                      data-testid="vt-preset-found-banner"
+                      className="p-3.5 bg-[#F7B91C] border-2 border-[#111111] shadow-[3px_3px_0px_#111111] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <CheckCircle2 className="w-5 h-5 text-[#111111] shrink-0 mt-0.5" />
+                        <div className="space-y-0.5 text-xs">
+                          <p
+                            className="font-extrabold uppercase tracking-wider text-sm text-[#111111]"
+                            style={{fontFamily: 'var(--font-display), sans-serif'}}
+                          >
+                            Link Preset Ditemukan pada VT TikTok (
+                            {vtInspectionResult.vtMeta.creatorHandle})
+                          </p>
+                          <p className="font-semibold text-[#111111]/90">
+                            {vtInspectionResult.feedbackMessage} Gunakan filter Kategori &amp; Jenis
+                            File di samping untuk menyaring hasil.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-[#111111] text-white font-mono text-xs font-bold whitespace-nowrap self-start sm:self-center">
+                        {totalFilteredLinks} Link Aktif
+                      </span>
+                    </div>
+                  ) : (
+                    <div
+                      role="status"
+                      data-testid="vt-no-preset-inline-banner"
+                      className="p-3.5 bg-[#F25C05] text-white border-2 border-[#111111] shadow-[3px_3px_0px_#111111] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 fill-white text-[#F25C05]" />
+                        <div className="space-y-0.5 text-xs">
+                          <p
+                            className="font-extrabold uppercase tracking-wider text-sm text-white"
+                            style={{fontFamily: 'var(--font-display), sans-serif'}}
+                          >
+                            VT Tidak Mengandung Link Preset ({vtInspectionResult.vtMeta.creatorHandle})
+                          </p>
+                          <p className="font-medium text-white/95">
+                            {vtInspectionResult.feedbackMessage}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 bg-[#111111] text-[#F7B91C] font-mono text-xs font-bold whitespace-nowrap self-start sm:self-center">
+                        0 Link Preset
+                      </span>
+                    </div>
+                  ))}
+              </section>
+            )}
+
+            {/* Result Count & Sort Header Bar */}
+            <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[#111111]">
+                <span className="w-3 h-3 bg-[#F25C05] border border-[#111111] inline-block" />
+                <strong
+                  className="text-[#111111] font-extrabold uppercase tracking-wider text-base"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
+                >
                   {activeList.length} repository results
                 </strong>
-                <span className="text-[#8b949e]">
+                <span className="font-mono font-bold text-[#111111]/70">
                   ({totalFilteredLinks} link preset aktif)
                 </span>
                 {categoryFilter !== 'all' && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1f6feb]/20 text-[#58a6ff] border border-[#1f6feb]/40 font-medium">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#F7B91C] text-[#111111] border-2 border-[#111111] font-bold">
                     <span>
                       Kategori:{' '}
                       {PRESET_CATEGORIES.find((c) => c.id === categoryFilter)?.label}
@@ -998,18 +1806,18 @@ export function PresetFinderWorkspace() {
                       type="button"
                       onClick={() => setCategoryFilter('all')}
                       aria-label="Hapus filter kategori"
-                      className="hover:text-white"
+                      className="hover:text-[#F25C05]"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center justify-between sm:justify-end gap-2">
+              <div className="flex items-center justify-between sm:justify-end gap-2.5">
                 {activeView !== 'beranda' && (
-                  <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#8b949e] shrink-0" />
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#111111]">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#111111] shrink-0" />
                     <span>Sort:</span>
                     <select
                       id="sort-select"
@@ -1018,7 +1826,7 @@ export function PresetFinderWorkspace() {
                       onChange={(e) =>
                         setSortBy(e.target.value as 'likes' | 'views' | 'links')
                       }
-                      className="px-2.5 py-1 text-xs font-medium bg-[#21262d] border border-[#30363d] rounded-md text-[#f0f6fc] focus:outline-none focus:ring-2 focus:ring-[#58a6ff]"
+                      className="px-2.5 py-1 text-xs font-bold bg-[#F6F5F0] border-2 border-[#111111] text-[#111111] focus:outline-none focus:bg-[#F7B91C]"
                     >
                       <option value="likes">Most stars / likes</option>
                       <option value="views">Most views</option>
@@ -1030,7 +1838,8 @@ export function PresetFinderWorkspace() {
                 <button
                   type="button"
                   onClick={handleExportSavedJson}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#c9d1d9] bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] rounded-md transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-[#111111] bg-[#F6F5F0] border-2 border-[#111111] shadow-[2px_2px_0px_#111111] hover:bg-[#F7B91C] transition-colors whitespace-nowrap shrink-0"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Ekspor JSON</span>
@@ -1045,15 +1854,106 @@ export function PresetFinderWorkspace() {
                 label={
                   activeView === 'beranda'
                     ? 'Memuat daftar repositori VT preset trending...'
-                    : `Memindai dan menyaring repositori preset untuk "${activeQuery}"...`
+                    : vtInspectionResult
+                      ? `Memindai deskripsi & komentar VT TikTok "${vtLinkInput}"...`
+                      : `Memindai dan menyaring repositori preset untuk "${activeQuery}"...`
                 }
               />
+            ) : vtInspectionResult && !vtInspectionResult.hasPresetLinks && activeView === 'search' ? (
+              /* FEEDBACK KHUSUS JIKA VT TIKTOK TIDAK MENGANDUNG LINK PRESET DI DESKRIPSI MAUPUN KOMENTAR */
+              <div
+                role="alert"
+                data-testid="vt-no-preset-feedback"
+                className="bg-white border-2 border-[#111111] shadow-[5px_5px_0px_#111111] overflow-hidden"
+              >
+                <div className="bg-[#F25C05] text-white px-4 sm:px-5 py-3 border-b-2 border-[#111111] flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 shrink-0 fill-white text-[#F25C05]" />
+                    <span
+                      className="text-sm sm:text-base font-extrabold uppercase tracking-wider"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
+                      Hasil Pindai Link VT TikTok: Tidak Ada Link Preset
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-[#111111] text-[#F7B91C] font-mono text-xs font-bold">
+                    0 LINK PRESET DITEMUKAN
+                  </span>
+                </div>
+
+                <div className="p-5 sm:p-6 space-y-4">
+                  <div className="space-y-1.5">
+                    <h3
+                      className="text-xl sm:text-2xl font-extrabold uppercase tracking-tight text-[#111111]"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
+                      VT Ini Tidak Mengandung Link Preset di Deskripsi Maupun Komentar
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[#111111]/85 font-medium leading-relaxed">
+                      {vtInspectionResult.feedbackMessage}
+                    </p>
+                  </div>
+
+                  {/* Detail Area yang Telah Dipindai */}
+                  <div className="bg-[#F6F5F0] border-2 border-[#111111] p-4 space-y-2.5 text-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b-2 border-dashed border-[#111111]/30 pb-2">
+                      <span className="font-extrabold uppercase tracking-wider text-[#111111]">
+                        Target Link VT TikTok:
+                      </span>
+                      <span className="font-mono font-bold text-[#F25C05] break-all">
+                        {vtInspectionResult.vtMeta.videoUrl}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      {vtInspectionResult.vtMeta.scannedSources.map((sourceName) => (
+                        <div
+                          key={sourceName}
+                          className="p-2.5 bg-white border-2 border-[#111111] flex items-center justify-between gap-2"
+                        >
+                          <span className="font-bold text-[#111111]">{sourceName}</span>
+                          <span className="px-1.5 py-0.5 bg-[#111111] text-white font-mono text-[10px] font-bold whitespace-nowrap">
+                            0 Link
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        executeTiktokVtLinkScan(
+                          'https://www.tiktok.com/@vkriedtz2/video/7696828668445756692'
+                        )
+                      }
+                      className="px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-[#111111] bg-[#F7B91C] hover:bg-[#e5a812] border-2 border-[#111111] shadow-[3px_3px_0px_#111111]"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
+                      Coba Contoh VT yang Ada Preset (@vkriedtz2)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleClearVtLinkScan}
+                      className="px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-[#111111] bg-white hover:bg-[#F6F5F0] border-2 border-[#111111] shadow-[3px_3px_0px_#111111]"
+                      style={{fontFamily: 'var(--font-display), sans-serif'}}
+                    >
+                      Reset &amp; Tampilkan Semua Preset Sound
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : activeList.length === 0 ? (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 sm:p-10 text-center space-y-3">
-                <p className="text-base font-semibold text-[#f0f6fc]">
+              <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-8 sm:p-10 text-center space-y-3">
+                <p
+                  className="text-xl font-extrabold uppercase tracking-tight text-[#111111]"
+                  style={{fontFamily: 'var(--font-display), sans-serif'}}
+                >
                   Tidak ada repositori VT preset yang cocok dengan filter saat ini
                 </p>
-                <p className="text-xs sm:text-sm text-[#8b949e] max-w-md mx-auto">
+                <p className="text-xs sm:text-sm text-[#111111]/75 font-medium max-w-md mx-auto">
                   Ubah filter kategori/platform ke “Semua”, atau klik tombol di bawah untuk
                   menampilkan seluruh daftar preset.
                 </p>
@@ -1064,28 +1964,32 @@ export function PresetFinderWorkspace() {
                       setCategoryFilter('all');
                       setPlatformFilter('all');
                       setLinkTypeFilter('all');
-                      if (activeView === 'beranda') {
+                      if (vtInspectionResult && vtInspectionResult.hasPresetLinks) {
+                        setEntries(vtInspectionResult.entries);
+                      } else if (activeView === 'beranda') {
                         handleSelectTrendingCategory('all');
                       } else {
-                        setSearchInput('kicau mania');
-                        executeSearch('kicau mania');
+                        handleClearVtLinkScan();
                       }
                     }}
-                    className="px-4 py-2 text-xs font-medium text-white bg-[#238636] hover:bg-[#2ea043] rounded-md"
+                    className="px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-[#111111] bg-[#F7B91C] border-2 border-[#111111] shadow-[3px_3px_0px_#111111] hover:bg-[#e5a812]"
+                    style={{fontFamily: 'var(--font-display), sans-serif'}}
                   >
                     Reset Filter &amp; Tampilkan Semua Preset
                   </button>
                 </div>
               </div>
             ) : (
-              /* GitHub Open-Source Repository Search Results List (Unlimited) */
-              <div className="space-y-3">
+              /* Neobrutalist Repository Search Results List */
+              <div className="space-y-4">
                 {activeList.map((entry, idx) => {
                   const summary = summarizePresetLinks(entry.links);
-                  const catMeta = getPresetCategoryMeta(detectPresetCategory(entry));
+                  const detectedCat = detectPresetCategory(entry);
+                  const catMeta = getPresetCategoryMeta(detectedCat);
                   const repoSlug = buildRepoSlug(entry);
                   const isSaved = savedEntries.some((s) => s.id === entry.id);
                   const isExpanded = Boolean(expandedCardIds[entry.id]);
+                  const isTopFeatured = idx === 0;
                   const visibleLinks =
                     isExpanded || entry.links.length <= 4
                       ? entry.links
@@ -1108,132 +2012,155 @@ export function PresetFinderWorkspace() {
                   return (
                     <article
                       key={entry.id}
-                      className="bg-[#161b22] border border-[#30363d] hover:border-[#8b949e]/60 rounded-lg p-4 transition-colors space-y-3"
+                      className="bg-white border-2 border-[#111111] shadow-[5px_5px_0px_#111111] overflow-hidden transition-transform"
                     >
-                      {/* GitHub Repo Card Header: owner/repo-slug + Public badge + Star/Detail actions */}
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                        <div className="space-y-1.5 min-w-0 flex-1">
-                          {/* Repo Path Line */}
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <BookMarked className="w-4 h-4 text-[#8b949e] shrink-0" />
-                            <button
-                              type="button"
-                              onClick={() => setSelectedEntry(entry)}
-                              className="text-left font-mono text-sm sm:text-base font-semibold text-[#58a6ff] hover:underline break-all"
-                            >
-                              {entry.creatorHandle.replace(/^@/, '')}
-                              <span className="text-[#8b949e] font-normal mx-0.5">/</span>
-                              <span>{repoSlug}</span>
-                            </button>
+                      {/* Top Header Zone (First card is highlighted in Taxi Yellow #F7B91C just like "STANDARD $12.50" in IMG_1220.jpeg) */}
+                      <div
+                        className={`p-4 sm:p-5 border-b-2 border-[#111111] flex flex-col sm:flex-row sm:items-start justify-between gap-4 ${
+                          isTopFeatured ? 'bg-[#F7B91C]' : 'bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                          {/* Creator's YouTube Channel or TikTok Account Profile Avatar */}
+                          <CreatorProfileAvatar
+                            entry={entry}
+                            profileHref={entry.platform === 'tiktok' ? tiktokHref : youtubeHref}
+                          />
 
-                            <span className="px-2 py-0.5 text-[11px] font-medium text-[#8b949e] border border-[#30363d] rounded-full whitespace-nowrap">
-                              {entry.platform === 'tiktok' ? 'TikTok VT' : 'YouTube'}
-                            </span>
-
-                            <span className="font-mono text-[11px] text-[#8b949e] tabular-nums">
-                              {activeView === 'beranda'
-                                ? `Trending #${String(idx + 1).padStart(2, '0')}`
-                                : `#${String(idx + 1).padStart(2, '0')}`}
-                            </span>
-                          </div>
-
-                          {/* Repo Description (VT Title & Sound) */}
-                          <h2 className="text-sm sm:text-base font-medium text-[#e6edf3] leading-snug">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedEntry(entry)}
-                              className="text-left hover:text-[#58a6ff] transition-colors"
-                            >
-                              {entry.vtTitle}
-                            </button>
-                          </h2>
-
-                          <p className="text-xs text-[#8b949e]">
-                            Sound:{' '}
-                            <strong className="text-[#c9d1d9] font-medium">
-                              {entry.soundName}
-                            </strong>
-                          </p>
-
-                          {/* GitHub-Style Topic Links Row */}
-                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] font-mono">
-                            <button
-                              type="button"
-                              onClick={() => setCategoryFilter(catMeta.id)}
-                              className="px-2 py-0.5 rounded-full bg-[#1f6feb]/15 text-[#58a6ff] hover:bg-[#1f6feb]/30 transition-colors"
-                            >
-                              {catMeta.badgeText}
-                            </button>
-                            {summary.am5mbCount > 0 && (
+                          <div className="space-y-1.5 min-w-0 flex-1">
+                            {/* Repo Path Line */}
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <BookMarked className="w-4 h-4 text-[#111111] shrink-0" />
                               <button
                                 type="button"
-                                onClick={() => setLinkTypeFilter('am_5mb')}
-                                className="px-2 py-0.5 rounded-full bg-[#1f6feb]/15 text-[#58a6ff] hover:bg-[#1f6feb]/30 transition-colors"
+                                onClick={() => setSelectedEntry(entry)}
+                                className="text-left font-mono text-xs sm:text-sm font-bold text-[#111111] underline decoration-2 hover:bg-[#111111] hover:text-white px-0.5 break-all transition-colors"
                               >
-                                preset-5mb ({summary.am5mbCount})
+                                {entry.creatorHandle.replace(/^@/, '')}
+                                <span className="mx-0.5">/</span>
+                                <span>{repoSlug}</span>
                               </button>
-                            )}
-                            {summary.xmlCount > 0 && (
+
+                              <span className="px-2 py-0.5 text-[11px] font-extrabold uppercase bg-white text-[#111111] border-2 border-[#111111] whitespace-nowrap">
+                                {entry.platform === 'tiktok' ? 'TikTok VT' : 'YouTube'}
+                              </span>
+
+                              <span className="px-1.5 py-0.5 font-mono text-[11px] font-bold bg-[#111111] text-white tabular-nums">
+                                {activeView === 'beranda'
+                                  ? `Trending #${String(idx + 1).padStart(2, '0')}`
+                                  : `#${String(idx + 1).padStart(2, '0')}`}
+                              </span>
+                            </div>
+
+                            {/* VT Title */}
+                            <h2
+                              className="text-lg sm:text-xl font-extrabold uppercase tracking-tight text-[#111111] leading-snug"
+                              style={{fontFamily: 'var(--font-display), sans-serif'}}
+                            >
                               <button
                                 type="button"
-                                onClick={() => setLinkTypeFilter('xml_drive')}
-                                className="px-2 py-0.5 rounded-full bg-[#1f6feb]/15 text-[#58a6ff] hover:bg-[#1f6feb]/30 transition-colors"
+                                onClick={() => setSelectedEntry(entry)}
+                                className="text-left hover:underline decoration-2"
                               >
-                                xml-drive ({summary.xmlCount})
+                                {entry.vtTitle}
                               </button>
-                            )}
-                            {summary.soundCount > 0 && (
+                            </h2>
+
+                            <p className="text-xs font-semibold text-[#111111]/85">
+                              Sound:{' '}
+                              <strong className="font-extrabold text-[#111111]">
+                                {entry.soundName}
+                              </strong>
+                            </p>
+
+                            {/* Topic Filter Buttons Row */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] font-mono font-bold">
                               <button
                                 type="button"
-                                onClick={() => setLinkTypeFilter('sound_audio')}
-                                className="px-2 py-0.5 rounded-full bg-[#1f6feb]/15 text-[#58a6ff] hover:bg-[#1f6feb]/30 transition-colors"
+                                onClick={() => setCategoryFilter(catMeta.id)}
+                                className="px-2 py-0.5 bg-white text-[#111111] border border-[#111111] hover:bg-[#111111] hover:text-white transition-colors"
                               >
-                                sound-audio ({summary.soundCount})
+                                {catMeta.badgeText}
                               </button>
-                            )}
-                          </div>
+                              {summary.am5mbCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkTypeFilter('am_5mb')}
+                                  className="px-2 py-0.5 bg-white text-[#111111] border border-[#111111] hover:bg-[#111111] hover:text-white transition-colors"
+                                >
+                                  preset-5mb ({summary.am5mbCount})
+                                </button>
+                              )}
+                              {summary.xmlCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkTypeFilter('xml_drive')}
+                                  className="px-2 py-0.5 bg-white text-[#111111] border border-[#111111] hover:bg-[#111111] hover:text-white transition-colors"
+                                >
+                                  xml-drive ({summary.xmlCount})
+                                </button>
+                              )}
+                              {summary.soundCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkTypeFilter('sound_audio')}
+                                  className="px-2 py-0.5 bg-white text-[#111111] border border-[#111111] hover:bg-[#111111] hover:text-white transition-colors"
+                                >
+                                  sound-audio ({summary.soundCount})
+                                </button>
+                              )}
+                            </div>
 
-                          {/* GitHub Open-Source Repo Metadata Row (Category Dot, Likes, Comments, Views, Updated) */}
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-[#8b949e]">
-                            <span className="inline-flex items-center gap-1.5 text-[#c9d1d9]">
-                              <span
-                                className="w-3 h-3 rounded-full inline-block"
-                                style={{backgroundColor: catMeta.dotColor}}
-                              />
-                              <span>{catMeta.label}</span>
-                            </span>
+                            {/* Metadata Row (Category, Likes, Comments, Views, Updated) */}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs font-bold text-[#111111]/85">
+                              <span className="inline-flex items-center gap-1.5">
+                                <span
+                                  className="w-3 h-3 border border-[#111111] inline-block"
+                                  style={{backgroundColor: catMeta.dotColor}}
+                                />
+                                <span>{catMeta.label}</span>
+                              </span>
 
-                            <span className="inline-flex items-center gap-1 font-mono tabular-nums text-[#c9d1d9]">
-                              <Heart className="w-3.5 h-3.5 text-[#f78166] fill-[#f78166]" />
-                              <strong>{entry.likesCount.toLocaleString('id-ID')}</strong>
-                            </span>
+                              <span className="inline-flex items-center gap-1 font-mono tabular-nums text-[#111111]">
+                                <Heart className="w-3.5 h-3.5 text-[#F25C05] fill-[#F25C05]" />
+                                <strong>{entry.likesCount.toLocaleString('id-ID')}</strong>
+                              </span>
 
-                            <span className="inline-flex items-center gap-1 font-mono tabular-nums">
-                              <MessageSquare className="w-3.5 h-3.5 text-[#8b949e]" />
-                              <span>{entry.commentsCount.toLocaleString('id-ID')}</span>
-                            </span>
+                              <span className="inline-flex items-center gap-1 font-mono tabular-nums">
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                <span>{entry.commentsCount.toLocaleString('id-ID')}</span>
+                              </span>
 
-                            <span className="inline-flex items-center gap-1 font-mono tabular-nums">
-                              <Eye className="w-3.5 h-3.5 text-[#8b949e]" />
-                              <span>{entry.viewsCount.toLocaleString('id-ID')}</span>
-                            </span>
+                              <span className="inline-flex items-center gap-1 font-mono tabular-nums">
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>{entry.viewsCount.toLocaleString('id-ID')}</span>
+                              </span>
 
-                            <span>Updated {entry.publishedAt}</span>
+                              <span>Updated {entry.publishedAt}</span>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Right Column: GitHub-style Action Buttons */}
-                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 shrink-0 pt-1 sm:pt-0">
+                        {/* Right Column: Neobrutalist Action Buttons (Cleanly Aligned, Flush Right Arrow Box) */}
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 shrink-0 pt-2 sm:pt-0 w-full sm:w-auto">
                           <button
                             type="button"
                             onClick={() => setSelectedEntry(entry)}
-                            className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#238636] hover:bg-[#2ea043] rounded-md transition-colors whitespace-nowrap shrink-0 text-center"
+                            className="col-span-2 sm:col-span-1 w-full sm:w-auto h-10 flex items-stretch justify-between border-2 border-[#111111] shadow-[3px_3px_0px_#111111] bg-[#F25C05] hover:bg-[#d94e00] text-white transition-transform active:translate-x-0.5 active:translate-y-0.5 whitespace-nowrap shrink-0"
                           >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            <span>
-                              {entry.platform === 'tiktok'
-                                ? `Lihat VT & Detail (${entry.links.length})`
-                                : `Lihat YT & Detail (${entry.links.length})`}
+                            <span
+                              className="flex-1 px-3.5 text-xs sm:text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                              style={{fontFamily: 'var(--font-display), sans-serif'}}
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                              <span>
+                                {entry.platform === 'tiktok'
+                                  ? `Lihat VT & Detail (${entry.links.length})`
+                                  : `Lihat YT & Detail (${entry.links.length})`}
+                              </span>
+                            </span>
+                            <span className="w-9 shrink-0 bg-[#111111] text-white flex items-center justify-center border-l-2 border-[#111111]">
+                              <ArrowRight className="w-4 h-4" />
                             </span>
                           </button>
 
@@ -1241,12 +2168,13 @@ export function PresetFinderWorkspace() {
                             href={entry.platform === 'tiktok' ? tiktokHref : youtubeHref}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-[#c9d1d9] bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded-md transition-colors whitespace-nowrap shrink-0"
+                            className="h-10 inline-flex items-center justify-center gap-1.5 px-3 text-xs sm:text-sm font-extrabold uppercase tracking-wider text-[#111111] bg-white hover:bg-[#111111] hover:text-white border-2 border-[#111111] shadow-[3px_3px_0px_#111111] transition-colors whitespace-nowrap shrink-0"
+                            style={{fontFamily: 'var(--font-display), sans-serif'}}
                           >
                             <span>
                               {entry.platform === 'tiktok' ? 'Buka TikTok' : 'Buka YouTube'}
                             </span>
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                           </a>
 
                           <button
@@ -1257,20 +2185,21 @@ export function PresetFinderWorkspace() {
                                 ? `Hapus ${entry.vtTitle} dari daftar tersimpan`
                                 : `Simpan ${entry.vtTitle} ke daftar`
                             }
-                            className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
+                            className={`h-10 inline-flex items-center justify-center gap-1.5 px-3 text-xs sm:text-sm font-extrabold uppercase tracking-wider border-2 border-[#111111] shadow-[3px_3px_0px_#111111] transition-colors whitespace-nowrap shrink-0 ${
                               isSaved
-                                ? 'bg-[#1f6feb]/20 text-[#58a6ff] border-[#1f6feb]/50 hover:bg-[#1f6feb]/30'
-                                : 'bg-[#21262d] text-[#c9d1d9] border-[#30363d] hover:bg-[#30363d]'
+                                ? 'bg-[#111111] text-[#F7B91C]'
+                                : 'bg-white text-[#111111] hover:bg-[#111111] hover:text-white'
                             }`}
+                            style={{fontFamily: 'var(--font-display), sans-serif'}}
                           >
                             {isSaved ? (
                               <>
-                                <BookmarkCheck className="w-3.5 h-3.5 text-[#58a6ff]" />
+                                <BookmarkCheck className="w-3.5 h-3.5 shrink-0" />
                                 <span>Tersimpan</span>
                               </>
                             ) : (
                               <>
-                                <Bookmark className="w-3.5 h-3.5" />
+                                <Bookmark className="w-3.5 h-3.5 shrink-0" />
                                 <span>Simpan</span>
                               </>
                             )}
@@ -1281,7 +2210,7 @@ export function PresetFinderWorkspace() {
                               type="button"
                               onClick={() => handleToggleSave(entry)}
                               aria-label={`Hapus ${entry.vtTitle}`}
-                              className="p-1.5 text-[#8b949e] hover:text-rose-400 hover:bg-rose-950/40 rounded-md transition-colors justify-self-end"
+                              className="h-10 w-10 inline-flex items-center justify-center text-[#111111] bg-white hover:bg-[#F25C05] hover:text-white border-2 border-[#111111] shadow-[3px_3px_0px_#111111] transition-colors justify-self-end shrink-0"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1289,12 +2218,17 @@ export function PresetFinderWorkspace() {
                         </div>
                       </div>
 
-                      {/* Filtered Links Rangkuman Box inside GitHub Repo Card */}
-                      <div className="bg-[#0d1117] border border-[#30363d] rounded-md p-3 space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#8b949e] border-b border-[#21262d] pb-2">
-                          <div className="flex flex-wrap items-center gap-1.5 font-medium text-[#c9d1d9]">
-                            <span>Rangkuman Link Preset:</span>
-                            <span className="font-mono tabular-nums text-[#8b949e] font-normal">
+                      {/* Filtered Links Rangkuman Box (Pickup -> Drop-off Dashed Route Box style from IMG_1220.jpeg) */}
+                      <div className="bg-[#F6F5F0] p-3.5 sm:p-4 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#111111] border-b-2 border-dashed border-[#111111]/35 pb-2">
+                          <div className="flex flex-wrap items-center gap-2 font-bold">
+                            <span
+                              className="uppercase tracking-wider text-sm font-extrabold"
+                              style={{fontFamily: 'var(--font-display), sans-serif'}}
+                            >
+                              Rangkuman Link Preset:
+                            </span>
+                            <span className="font-mono tabular-nums text-[#F25C05]">
                               {summary.am5mbCount > 0 && `${summary.am5mbCount}× Prst 5MB`}
                               {summary.am5mbCount > 0 && summary.xmlCount > 0 && ' · '}
                               {summary.xmlCount > 0 && `${summary.xmlCount}× Prst XML`}
@@ -1305,21 +2239,21 @@ export function PresetFinderWorkspace() {
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-3 text-xs">
+                          <div className="flex items-center gap-3 text-xs font-bold">
                             <button
                               type="button"
                               onClick={() => setSelectedEntry(entry)}
-                              className="text-[#58a6ff] hover:underline font-medium cursor-pointer"
+                              className="text-[#F25C05] hover:underline cursor-pointer"
                             >
                               {entry.platform === 'tiktok' ? 'Putar Video VT' : 'Putar Video YT'}
                             </button>
-                            <span className="text-[#30363d]">·</span>
+                            <span>·</span>
                             {entry.platform === 'tiktok' ? (
                               <a
                                 href={tiktokHref}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[#8b949e] hover:text-[#f0f6fc] underline"
+                                className="text-[#111111] underline hover:bg-[#F7B91C] px-1"
                               >
                                 VT TikTok
                               </a>
@@ -1328,7 +2262,7 @@ export function PresetFinderWorkspace() {
                                 href={youtubeHref}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[#8b949e] hover:text-[#f0f6fc] underline"
+                                className="text-[#111111] underline hover:bg-[#F7B91C] px-1"
                               >
                                 Video YouTube
                               </a>
@@ -1336,22 +2270,29 @@ export function PresetFinderWorkspace() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-1.5">
-                          {visibleLinks.map((link) => (
+                        <div className="grid grid-cols-1 gap-2">
+                          {visibleLinks.map((link, lIdx) => (
                             <div
                               key={link.id}
-                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-1.5 px-2.5 rounded bg-[#161b22] border border-[#30363d]/80 text-xs"
+                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2 px-3 bg-white border-2 border-[#111111] text-xs"
                             >
-                              <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
-                                <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2.5">
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {/* Orange / Black square terminal like Pickup / Drop-off in IMG_1220.jpeg */}
+                                  <span
+                                    className={`w-3 h-3 border border-[#111111] shrink-0 ${
+                                      lIdx % 2 === 0 ? 'bg-[#F25C05]' : 'bg-[#111111]'
+                                    }`}
+                                    aria-hidden="true"
+                                  />
                                   {link.type === 'am_5mb' ? (
-                                    <Share2 className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
+                                    <Share2 className="w-3.5 h-3.5 text-[#111111] shrink-0" />
                                   ) : link.type === 'xml_drive' ? (
-                                    <FileCode2 className="w-3.5 h-3.5 text-[#3fb950] shrink-0" />
+                                    <FileCode2 className="w-3.5 h-3.5 text-[#111111] shrink-0" />
                                   ) : (
-                                    <Music className="w-3.5 h-3.5 text-[#d29922] shrink-0" />
+                                    <Music className="w-3.5 h-3.5 text-[#111111] shrink-0" />
                                   )}
-                                  <span className="font-semibold text-[#e6edf3] whitespace-nowrap">
+                                  <span className="font-extrabold uppercase tracking-wide text-[#111111] whitespace-nowrap">
                                     {link.label} :
                                   </span>
                                 </div>
@@ -1359,18 +2300,18 @@ export function PresetFinderWorkspace() {
                                   href={link.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="block font-mono text-[#58a6ff] hover:underline truncate"
+                                  className="block font-mono font-medium text-[#111111] underline decoration-[#F7B91C] decoration-2 hover:bg-[#F7B91C] truncate"
                                 >
                                   {link.url}
                                 </a>
                               </div>
 
-                              <div className="flex items-center justify-end gap-1.5 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-[#21262d]">
+                              <div className="flex items-center justify-end gap-1.5 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-dashed border-[#111111]/30">
                                 {link.xmlMeta && (
                                   <button
                                     type="button"
                                     onClick={() => setSelectedEntry(entry)}
-                                    className="px-2 py-1 text-xs font-mono text-[#8b949e] hover:text-[#f0f6fc] bg-[#21262d] hover:bg-[#30363d] rounded transition-colors truncate max-w-[130px] sm:max-w-none"
+                                    className="px-2 py-1 text-xs font-mono font-bold text-[#111111] bg-[#F6F5F0] hover:bg-[#F7B91C] border border-[#111111] transition-colors truncate max-w-[130px] sm:max-w-none"
                                   >
                                     {link.xmlMeta.fileName}
                                   </button>
@@ -1378,11 +2319,11 @@ export function PresetFinderWorkspace() {
                                 <button
                                   type="button"
                                   onClick={() => handleQuickCopy(link.url, link.id)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#c9d1d9] hover:text-white bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded transition-colors whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#111111] bg-white hover:bg-[#F7B91C] border-2 border-[#111111] transition-colors whitespace-nowrap shrink-0"
                                 >
                                   {copiedLinkKey === link.id ? (
                                     <>
-                                      <Check className="w-3 h-3 text-[#3fb950]" />
+                                      <Check className="w-3 h-3 text-[#F25C05]" />
                                       <span>Disalin</span>
                                     </>
                                   ) : (
@@ -1396,7 +2337,7 @@ export function PresetFinderWorkspace() {
                                   href={link.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#c9d1d9] hover:text-white bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded transition-colors whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#111111] bg-[#F7B91C] hover:bg-[#111111] hover:text-white border-2 border-[#111111] transition-colors whitespace-nowrap shrink-0"
                                 >
                                   <span>Buka</span>
                                   <ExternalLink className="w-3 h-3" />
@@ -1411,16 +2352,17 @@ export function PresetFinderWorkspace() {
                             <button
                               type="button"
                               onClick={() => toggleExpandCard(entry.id)}
-                              className="w-full py-1.5 text-xs font-medium text-[#58a6ff] hover:underline bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded inline-flex items-center justify-center gap-1 transition-colors"
+                              className="w-full py-2 text-xs font-extrabold uppercase tracking-wider text-[#111111] bg-white hover:bg-[#F7B91C] border-2 border-[#111111] shadow-[2px_2px_0px_#111111] inline-flex items-center justify-center gap-1.5 transition-colors"
+                              style={{fontFamily: 'var(--font-display), sans-serif'}}
                             >
                               {isExpanded ? (
                                 <>
-                                  <ChevronUp className="w-3.5 h-3.5" />
+                                  <ChevronUp className="w-4 h-4" />
                                   <span>Sembunyikan sebagian link</span>
                                 </>
                               ) : (
                                 <>
-                                  <ChevronDown className="w-3.5 h-3.5" />
+                                  <ChevronDown className="w-4 h-4" />
                                   <span>
                                     Tampilkan +{hiddenCount} Link Preset Lainnya (Total{' '}
                                     {entry.links.length} Link)
@@ -1437,45 +2379,48 @@ export function PresetFinderWorkspace() {
               </div>
             )}
 
-            {/* Reference & Filter Specification Section (GitHub README style) */}
+            {/* Reference & Filter Specification Section (Fare Breakdown Dotted Style from IMG_1220.jpeg) */}
             <section
               id="filter-rules"
-              className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2"
+              className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-2"
             >
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 sm:p-5 space-y-3">
-                <h2
-                  className="text-sm sm:text-base font-semibold text-[#f0f6fc]"
-                  style={{fontFamily: 'var(--font-display), sans-serif'}}
-                >
-                  01. Spesifikasi Filter Link Preset Ketat
-                </h2>
-                <p className="text-xs text-[#8b949e] leading-relaxed">
+              <div className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-5 space-y-3">
+                <div className="flex items-center justify-between border-b-2 border-[#111111] pb-2">
+                  <h2
+                    className="text-lg font-extrabold uppercase tracking-wider text-[#111111]"
+                    style={{fontFamily: 'var(--font-display), sans-serif'}}
+                  >
+                    01. Spesifikasi Filter Link Preset Ketat
+                  </h2>
+                  <span className="w-3.5 h-3.5 bg-[#F7B91C] border border-[#111111]" />
+                </div>
+                <p className="text-xs text-[#111111]/80 font-medium leading-relaxed">
                   Setiap deskripsi video dan komentar VT dipindai baris demi baris. Hanya tautan
                   yang memenuhi struktur domain preset resmi di bawah ini yang disimpan ke dalam
                   repositori:
                 </p>
-                <div className="divide-y divide-[#30363d] border border-[#30363d] rounded-md text-xs font-mono bg-[#0d1117]">
-                  <div className="p-2.5 flex flex-col gap-1">
-                    <span className="font-sans font-semibold text-[#f0f6fc]">
+                <div className="divide-y-2 divide-dashed divide-[#111111]/30 border-2 border-[#111111] text-xs font-mono bg-[#F6F5F0]">
+                  <div className="p-3 flex flex-col gap-1">
+                    <span className="font-sans font-extrabold uppercase text-[#111111]">
                       Preset 5MB (Alight Creative Direct Share)
                     </span>
-                    <span className="text-[#58a6ff] break-all">
+                    <span className="text-[#F25C05] font-bold break-all">
                       https://alightcreative.com/am/share/u/[UID]/p/[PROJECT_ID]
                     </span>
                   </div>
-                  <div className="p-2.5 flex flex-col gap-1">
-                    <span className="font-sans font-semibold text-[#f0f6fc]">
+                  <div className="p-3 flex flex-col gap-1">
+                    <span className="font-sans font-extrabold uppercase text-[#111111]">
                       Preset XML &amp; Folder Paket (Google Drive)
                     </span>
-                    <span className="text-[#3fb950] break-all">
+                    <span className="text-[#111111] font-bold break-all">
                       https://drive.google.com/file/d/[FILE_ID]/view?usp=drivesdk
                     </span>
                   </div>
-                  <div className="p-2.5 flex flex-col gap-1">
-                    <span className="font-sans font-semibold text-[#f0f6fc]">
+                  <div className="p-3 flex flex-col gap-1">
+                    <span className="font-sans font-extrabold uppercase text-[#111111]">
                       Sound Audio .m4a / .mp3 (MediaFire &amp; Google Drive)
                     </span>
-                    <span className="text-[#d29922] break-all">
+                    <span className="text-[#111111] font-bold break-all">
                       https://www.mediafire.com/file/[ID]/[nama_sound].m4a/file
                     </span>
                   </div>
@@ -1484,20 +2429,25 @@ export function PresetFinderWorkspace() {
 
               <div
                 id="xml-format"
-                className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 sm:p-5 space-y-3"
+                className="bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] p-5 space-y-3"
               >
-                <h2
-                  className="text-sm sm:text-base font-semibold text-[#f0f6fc]"
-                  style={{fontFamily: 'var(--font-display), sans-serif'}}
-                >
-                  02. Dukungan Inspeksi Scene XML Alight Motion
-                </h2>
-                <p className="text-xs text-[#8b949e] leading-relaxed">
+                <div className="flex items-center justify-between border-b-2 border-[#111111] pb-2">
+                  <h2
+                    className="text-lg font-extrabold uppercase tracking-wider text-[#111111]"
+                    style={{fontFamily: 'var(--font-display), sans-serif'}}
+                  >
+                    02. Dukungan Inspeksi Scene XML Alight Motion
+                  </h2>
+                  <span className="w-3.5 h-3.5 bg-[#F25C05] border border-[#111111]" />
+                </div>
+                <p className="text-xs text-[#111111]/80 font-medium leading-relaxed">
                   Setiap tautan XML Google Drive dilengkapi pembaca struktur header{' '}
-                  <span className="font-mono text-xs text-[#e6edf3]">&lt;scene&gt;</span> Alight
-                  Motion untuk memverifikasi resolusi kanvas, frame rate, dan versi aplikasi:
+                  <span className="font-mono font-bold text-xs text-[#111111] bg-[#F7B91C] px-1">
+                    &lt;scene&gt;
+                  </span>{' '}
+                  Alight Motion untuk memverifikasi resolusi kanvas, frame rate, dan versi aplikasi:
                 </p>
-                <pre className="p-3 rounded-md bg-[#0d1117] text-[#e6edf3] font-mono text-xs leading-relaxed overflow-x-auto border border-[#30363d]">
+                <pre className="p-3.5 bg-[#F6F5F0] text-[#111111] font-mono text-xs font-semibold leading-relaxed overflow-x-auto border-2 border-[#111111]">
 {`<?xml version='1.0' encoding='UTF-8' ?><!--
 Created by Alight Motion (http://alightmotion.com)
 5.0.272.1028400 (1028400) edd8b98
@@ -1511,28 +2461,28 @@ Created by Alight Motion (http://alightmotion.com)
         </div>
       </main>
 
-      {/* Centered, Simple, Non-Intrusive Developer Credit & Official Channel Footer (GitHub Dark Footer) */}
-      <footer className="mt-8 sm:mt-12 border-t border-[#30363d] bg-[#161b22] px-4 sm:px-8 py-6">
-        <div className="max-w-3xl mx-auto flex flex-col items-center justify-center text-center gap-2.5 text-xs text-[#8b949e]">
-          <div className="flex flex-wrap items-center justify-center gap-2 text-[#c9d1d9]">
+      {/* Neobrutalist Footer */}
+      <footer className="mt-8 sm:mt-12 border-t-2 border-[#111111] bg-white px-4 sm:px-8 py-7">
+        <div className="max-w-3xl mx-auto flex flex-col items-center justify-center text-center gap-3 text-xs text-[#111111]">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <Image
               src="/assets/alight-motion-logo.jpg"
               alt="Alight Motion"
-              width={20}
-              height={20}
+              width={22}
+              height={22}
               referrerPolicy="no-referrer"
-              className="rounded border border-[#30363d]"
+              className="border-2 border-[#111111]"
             />
-            <span>Developed by</span>
+            <span className="font-bold">Developed by</span>
             <strong
-              className="font-bold text-[#f0f6fc] tracking-tight"
+              className="text-base font-extrabold uppercase tracking-wider bg-[#F7B91C] px-2 py-0.5 border-2 border-[#111111]"
               style={{fontFamily: 'var(--font-display), sans-serif'}}
             >
               SANN404 FORUM GROUP
             </strong>
           </div>
 
-          <p className="text-xs text-[#8b949e] max-w-md">
+          <p className="text-xs font-medium text-[#111111]/80 max-w-md">
             Dapatkan update preset Alight Motion terbaru &amp; info komunitas melalui saluran resmi:
           </p>
 
@@ -1540,19 +2490,26 @@ Created by Alight Motion (http://alightmotion.com)
             href="https://whatsapp.com/channel/0029Vb6ukqnHQbS4mKP0j80L"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-[#238636] hover:bg-[#2ea043] rounded-md transition-colors"
+            className="inline-flex items-stretch border-2 border-[#111111] shadow-[3px_3px_0px_#111111] bg-[#F7B91C] hover:bg-[#e5a812] text-[#111111] transition-transform active:translate-x-0.5 active:translate-y-0.5"
           >
-            <span>Saluran Resmi SANN404 FORUM GROUP (WhatsApp)</span>
-            <ExternalLink className="w-3.5 h-3.5" />
+            <span
+              className="px-4 py-2 text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5"
+              style={{fontFamily: 'var(--font-display), sans-serif'}}
+            >
+              <span>Saluran Resmi SANN404 FORUM GROUP (WhatsApp)</span>
+            </span>
+            <span className="px-2.5 bg-[#111111] text-white flex items-center justify-center border-l-2 border-[#111111]">
+              <ExternalLink className="w-3.5 h-3.5" />
+            </span>
           </a>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-[11px] text-[#8b949e]">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-xs font-bold text-[#111111]/75">
             <span>PresetFinder Studio</span>
             <span aria-hidden="true">·</span>
             <button
               type="button"
               onClick={() => setIsExtractorOpen(true)}
-              className="hover:text-[#f0f6fc] transition-colors"
+              className="hover:text-[#F25C05] underline transition-colors"
             >
               Filter Komentar Manual
             </button>
@@ -1560,7 +2517,7 @@ Created by Alight Motion (http://alightmotion.com)
             <button
               type="button"
               onClick={handleExportSavedJson}
-              className="hover:text-[#f0f6fc] transition-colors"
+              className="hover:text-[#F25C05] underline transition-colors"
             >
               Ekspor Daftar ({savedEntries.length})
             </button>

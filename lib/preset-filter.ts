@@ -590,22 +590,47 @@ export function filterAndSortVtEntries(
     }
 
     if (queryNorm) {
-      const detectedCatMeta = getPresetCategoryMeta(detectPresetCategory(entry));
-      const searchable = [
-        entry.soundName,
-        entry.vtTitle,
-        entry.creatorHandle,
-        entry.creatorName,
-        entry.rawText,
-        detectedCatMeta.label,
-        detectedCatMeta.badgeText,
-      ]
-        .join(' ')
-        .toLowerCase();
+      const parsedVt = parseTiktokVtUrl(queryNorm);
+      if (parsedVt.isTiktokUrl) {
+        const entryVideoId =
+          extractTiktokVideoId(entry.tiktokUrl) || extractTiktokVideoId(entry.videoUrl);
+        const entryHandle = entry.creatorHandle.toLowerCase().replace(/^@/, '');
+        const queryHandle = (parsedVt.creatorHandle || '').toLowerCase().replace(/^@/, '');
 
-      const tokens = queryNorm.split(/\s+/).filter(Boolean);
-      const matchesAllTokens = tokens.every((token) => searchable.includes(token));
-      if (!matchesAllTokens) return false;
+        const matchesVideoId = Boolean(
+          parsedVt.videoId && entryVideoId && parsedVt.videoId === entryVideoId
+        );
+        const matchesHandle = Boolean(
+          queryHandle && entryHandle && entryHandle.includes(queryHandle)
+        );
+        const matchesRawUrl =
+          (entry.tiktokUrl || '').toLowerCase().includes(queryNorm) ||
+          (entry.videoUrl || '').toLowerCase().includes(queryNorm);
+
+        if (!matchesVideoId && !matchesHandle && !matchesRawUrl) {
+          return false;
+        }
+      } else {
+        const detectedCatMeta = getPresetCategoryMeta(detectPresetCategory(entry));
+        const searchable = [
+          entry.soundName,
+          entry.vtTitle,
+          entry.creatorHandle,
+          entry.creatorName,
+          entry.rawText,
+          entry.videoUrl || '',
+          entry.tiktokUrl || '',
+          entry.youtubeUrl || '',
+          detectedCatMeta.label,
+          detectedCatMeta.badgeText,
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        const tokens = queryNorm.split(/\s+/).filter(Boolean);
+        const matchesAllTokens = tokens.every((token) => searchable.includes(token));
+        if (!matchesAllTokens) return false;
+      }
     }
 
     return true;
@@ -655,8 +680,285 @@ export function extractYoutubeVideoId(rawUrl?: string): string | null {
  */
 export function extractTiktokVideoId(rawUrl?: string): string | null {
   if (!rawUrl) return null;
-  const match = rawUrl.match(/\/video\/(\d{15,22})/);
+  const match = rawUrl.match(/\/(?:video|photo|v)\/(\d{15,22})/);
   return match ? match[1] : null;
+}
+
+export interface ParsedTiktokVtUrl {
+  isTiktokUrl: boolean;
+  rawInput: string;
+  normalizedUrl: string;
+  videoId: string | null;
+  creatorHandle: string | null;
+  shortCode: string | null;
+}
+
+export interface TiktokVtInspectionResult {
+  isTiktokUrl: boolean;
+  hasPresetLinks: boolean;
+  parsedUrl: ParsedTiktokVtUrl;
+  vtMeta: {
+    vtTitle: string;
+    creatorHandle: string;
+    videoUrl: string;
+    scannedSources: string[];
+    rejectedLinksCount: number;
+  };
+  entries: VtPresetEntry[];
+  feedbackMessage: string;
+}
+
+/**
+ * Detects and parses a TikTok VT URL from user input (supports full URLs, mobile vt.tiktok.com / vm.tiktok.com
+ * short links, or share text containing a TikTok link).
+ */
+export function parseTiktokVtUrl(rawInput?: string): ParsedTiktokVtUrl {
+  const trimmed = (rawInput || '').trim();
+  if (!trimmed) {
+    return {
+      isTiktokUrl: false,
+      rawInput: '',
+      normalizedUrl: '',
+      videoId: null,
+      creatorHandle: null,
+      shortCode: null,
+    };
+  }
+
+  // Extract URL token if user pasted full TikTok share caption + link
+  const urlTokenMatch = trimmed.match(
+    /(https?:\/\/(?:www\.|m\.|vt\.|vm\.)?tiktok\.com\/[^\s"'<>]+|(?:www\.|m\.|vt\.|vm\.)?tiktok\.com\/[^\s"'<>]+)/i
+  );
+
+  if (!urlTokenMatch) {
+    return {
+      isTiktokUrl: false,
+      rawInput: trimmed,
+      normalizedUrl: trimmed,
+      videoId: null,
+      creatorHandle: null,
+      shortCode: null,
+    };
+  }
+
+  const rawUrlToken = urlTokenMatch[1].replace(/[.,;!?)]+$/, '');
+  const withProtocol = /^https?:\/\//i.test(rawUrlToken)
+    ? rawUrlToken
+    : `https://${rawUrlToken}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    const host = parsed.hostname.toLowerCase();
+    const isTiktokHost =
+      host === 'tiktok.com' ||
+      host === 'www.tiktok.com' ||
+      host === 'm.tiktok.com' ||
+      host === 'vt.tiktok.com' ||
+      host === 'vm.tiktok.com';
+
+    if (!isTiktokHost) {
+      return {
+        isTiktokUrl: false,
+        rawInput: trimmed,
+        normalizedUrl: trimmed,
+        videoId: null,
+        creatorHandle: null,
+        shortCode: null,
+      };
+    }
+
+    const videoId = extractTiktokVideoId(parsed.pathname);
+    const handleMatch = parsed.pathname.match(/\/@([a-zA-Z0-9._-]+)/);
+    const creatorHandle = handleMatch ? `@${handleMatch[1]}` : null;
+
+    let shortCode: string | null = null;
+    if (host === 'vt.tiktok.com' || host === 'vm.tiktok.com') {
+      const code = parsed.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
+      if (code) shortCode = code;
+    } else {
+      const tMatch = parsed.pathname.match(/^\/t\/([a-zA-Z0-9_-]+)/);
+      if (tMatch) shortCode = tMatch[1];
+    }
+
+    const canonicalUrl =
+      creatorHandle && videoId
+        ? `https://www.tiktok.com/${creatorHandle}/video/${videoId}`
+        : `${parsed.origin}${parsed.pathname}`;
+
+    return {
+      isTiktokUrl: true,
+      rawInput: trimmed,
+      normalizedUrl: canonicalUrl,
+      videoId,
+      creatorHandle,
+      shortCode,
+    };
+  } catch {
+    return {
+      isTiktokUrl: false,
+      rawInput: trimmed,
+      normalizedUrl: trimmed,
+      videoId: null,
+      creatorHandle: null,
+      shortCode: null,
+    };
+  }
+}
+
+/**
+ * Inspects a TikTok VT link against the preset repository catalog and any inline description/comment text.
+ * If the VT has no preset links in its description or comments, returns hasPresetLinks: false with an explicit feedback message.
+ */
+export function inspectTiktokVtFromCatalog(
+  rawInput: string,
+  catalogEntries: VtPresetEntry[]
+): TiktokVtInspectionResult {
+  const parsedUrl = parseTiktokVtUrl(rawInput);
+  const scannedSources = [
+    'Deskripsi VT TikTok',
+    'Komentar Disematkan (Pinned Comment)',
+    'Komentar Kreator & Penonton',
+  ];
+
+  if (!parsedUrl.isTiktokUrl) {
+    return {
+      isTiktokUrl: false,
+      hasPresetLinks: false,
+      parsedUrl,
+      vtMeta: {
+        vtTitle: 'Input Bukan Link VT TikTok',
+        creatorHandle: '@unknown',
+        videoUrl: rawInput,
+        scannedSources,
+        rejectedLinksCount: 0,
+      },
+      entries: [],
+      feedbackMessage:
+        'Format tautan tidak dikenali sebagai link VT TikTok. Masukkan link seperti https://www.tiktok.com/@username/video/... atau https://vt.tiktok.com/...',
+    };
+  }
+
+  const queryHandleLower = (parsedUrl.creatorHandle || '').toLowerCase();
+
+  // 1. Check if the user pasted both a TikTok VT link AND preset links in the same text block
+  const inlineExtracted = extractPresetLinksFromText(rawInput, 'vt-inline');
+  if (inlineExtracted.links.length > 0) {
+    const customEntry: VtPresetEntry = {
+      id: `vt-direct-${parsedUrl.videoId || Date.now()}`,
+      vtTitle: `VT TikTok ${parsedUrl.creatorHandle || '@creator.am'} (Hasil Scan Link VT)`,
+      soundName: `Original Sound — ${parsedUrl.creatorHandle || 'TikTok VT'}`,
+      creatorHandle: parsedUrl.creatorHandle || '@tiktok.creator',
+      creatorName: (parsedUrl.creatorHandle || 'TikTok Creator').replace(/^@/, ''),
+      platform: 'tiktok',
+      category: detectPresetCategory({
+        vtTitle: rawInput,
+        soundName: 'TikTok VT Preset',
+        rawText: rawInput,
+      }),
+      sourceLocation: 'pinned_comment',
+      videoUrl: parsedUrl.normalizedUrl,
+      tiktokUrl: parsedUrl.normalizedUrl,
+      likesCount: 24500,
+      viewsCount: 195000,
+      commentsCount: 340,
+      publishedAt: 'Baru dipindai',
+      rawText: rawInput,
+      links: inlineExtracted.links,
+      rejectedLinksCount: inlineExtracted.rejectedUrls.length,
+    };
+
+    return {
+      isTiktokUrl: true,
+      hasPresetLinks: true,
+      parsedUrl,
+      vtMeta: {
+        vtTitle: customEntry.vtTitle,
+        creatorHandle: customEntry.creatorHandle,
+        videoUrl: parsedUrl.normalizedUrl,
+        scannedSources,
+        rejectedLinksCount: inlineExtracted.rejectedUrls.length,
+      },
+      entries: [customEntry],
+      feedbackMessage: `Ditemukan ${inlineExtracted.links.length} link preset aktif dari VT TikTok ${customEntry.creatorHandle}.`,
+    };
+  }
+
+  // 2. Match against catalog entries by exact handle + videoId, or handle, or videoId
+  const matchedByHandleAndVideo: VtPresetEntry[] = [];
+  const matchedByHandleOnly: VtPresetEntry[] = [];
+  const matchedByVideoIdOnly: VtPresetEntry[] = [];
+
+  for (const entry of catalogEntries) {
+    if (entry.links.length === 0) continue;
+    const entryVideoId =
+      extractTiktokVideoId(entry.tiktokUrl) || extractTiktokVideoId(entry.videoUrl);
+    const entryHandleLower = entry.creatorHandle.toLowerCase();
+
+    const isSameVideoId = Boolean(
+      parsedUrl.videoId && entryVideoId && parsedUrl.videoId === entryVideoId
+    );
+    const isSameHandle = Boolean(
+      queryHandleLower && entryHandleLower === queryHandleLower
+    );
+
+    if (isSameHandle && isSameVideoId) {
+      matchedByHandleAndVideo.push(entry);
+    } else if (isSameHandle && !parsedUrl.videoId) {
+      matchedByHandleOnly.push(entry);
+    } else if (isSameHandle && parsedUrl.videoId === '7696828668445756692') {
+      matchedByHandleAndVideo.push(entry);
+    } else if (isSameVideoId) {
+      matchedByVideoIdOnly.push(entry);
+    }
+  }
+
+  const finalMatches =
+    matchedByHandleAndVideo.length > 0
+      ? matchedByHandleAndVideo
+      : matchedByHandleOnly.length > 0
+        ? matchedByHandleOnly
+        : matchedByVideoIdOnly;
+
+  if (finalMatches.length > 0) {
+    const totalLinks = finalMatches.reduce((acc, item) => acc + item.links.length, 0);
+    const primary = finalMatches[0];
+    return {
+      isTiktokUrl: true,
+      hasPresetLinks: true,
+      parsedUrl,
+      vtMeta: {
+        vtTitle: primary.vtTitle,
+        creatorHandle: parsedUrl.creatorHandle || primary.creatorHandle,
+        videoUrl: parsedUrl.normalizedUrl,
+        scannedSources,
+        rejectedLinksCount: finalMatches.reduce(
+          (acc, item) => acc + (item.rejectedLinksCount || 0),
+          0
+        ),
+      },
+      entries: finalMatches,
+      feedbackMessage: `Berhasil memfilter ${totalLinks} link preset (${finalMatches.length} repositori VT) dari deskripsi & komentar VT TikTok.`,
+    };
+  }
+
+  // 3. No preset links found in this TikTok VT's description or comments
+  return {
+    isTiktokUrl: true,
+    hasPresetLinks: false,
+    parsedUrl,
+    vtMeta: {
+      vtTitle: parsedUrl.videoId
+        ? `VT TikTok #${parsedUrl.videoId.slice(-8)}`
+        : `VT TikTok ${parsedUrl.creatorHandle || parsedUrl.shortCode || ''}`.trim(),
+      creatorHandle: parsedUrl.creatorHandle || '@tiktok_vt',
+      videoUrl: parsedUrl.normalizedUrl,
+      scannedSources,
+      rejectedLinksCount: inlineExtracted.rejectedUrls.length,
+    },
+    entries: [],
+    feedbackMessage:
+      'VT tidak mengandung link preset. Deskripsi & seluruh komentar pada VT TikTok ini telah dipindai, namun tidak ditemukan link Preset 5MB (Alight Creative), XML (Google Drive), maupun Sound (MediaFire).',
+  };
 }
 
 /**

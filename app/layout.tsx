@@ -1,16 +1,16 @@
 import type {Metadata} from 'next';
-import {Plus_Jakarta_Sans, Public_Sans, JetBrains_Mono} from 'next/font/google';
+import {Barlow_Condensed, Plus_Jakarta_Sans, JetBrains_Mono} from 'next/font/google';
 import './globals.css';
 
-const plusJakarta = Plus_Jakarta_Sans({
+const barlowCondensed = Barlow_Condensed({
   subsets: ['latin'],
-  weight: ['500', '600', '700'],
+  weight: ['600', '700', '800'],
   variable: '--font-display',
 });
 
-const publicSans = Public_Sans({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  weight: ['400', '500', '600'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-body',
 });
 
@@ -42,11 +42,11 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html
       lang="id"
-      className={`${plusJakarta.variable} ${publicSans.variable} ${jetbrainsMono.variable}`}
+      className={`${barlowCondensed.variable} ${plusJakarta.variable} ${jetbrainsMono.variable}`}
     >
       <body
         suppressHydrationWarning
-        className="bg-slate-50 text-slate-900 antialiased selection:bg-blue-600 selection:text-white"
+        className="bg-[#F6F5F0] text-[#111111] antialiased selection:bg-[#F7B91C] selection:text-[#111111]"
         style={{fontFamily: 'var(--font-body), sans-serif'}}
       >
         {children}
